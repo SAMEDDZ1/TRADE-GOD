@@ -61,15 +61,22 @@
   function ensureTimer() {
     if (S.timer) return;
     S.timer = setInterval(() => {
-      if (!S.body || !document.contains(S.body)) { clearInterval(S.timer); S.timer = null; if (S.chart) { S.chart.destroy(); S.chart = null; } if (S.floor) { S.floor.destroy(); S.floor = null; } return; }
+      if (!S.body || !document.contains(S.body)) { stopDesk(); return; }
       refresh();
     }, 2000);
   }
 
   // ------------------------------------------------------------------ shell
+  function stopDesk() {
+    if (S.timer) { clearInterval(S.timer); S.timer = null; }
+    if (S.chart) { S.chart.destroy(); S.chart = null; }
+    if (S.floor) { S.floor.destroy(); S.floor = null; }
+  }
   function build(body) {
     S.body = body;
     body.classList.add('tg-root');
+    const H = StationUI.h || {};
+    if (H.scopeOf) H.scopeOf(body).own('trading-poll', () => { if (S.body === body) { stopDesk(); S.body = null; } });   // the render contract: close stops the price poll at once
     body.innerHTML = '<div class="tg">'
       + '<div class="tg-top" data-slot="top"></div>'
       + '<div class="tg-tabs">' + TABS.map(([k, l]) => '<button class="tg-tab' + (S.tab === k ? ' on' : '') + '" data-tab="' + k + '">' + l + '<span class="tg-badge" data-badge="' + k + '"></span></button>').join('') + '</div>'
@@ -509,14 +516,14 @@
     let pref = '1';
     try { pref = localStorage.getItem('tradegod.openDeskOnLaunch') || '1'; } catch (_) {}
     if (pref === '0') return;
+    // a short launch-time wait (no window exists yet, so there is no window scope to own it); it ends itself
     const started = Date.now();
-    const iv = setInterval(() => {
-      if (Date.now() - started > 120000) { clearInterval(iv); return; }
+    (function look() {
+      if (Date.now() - started > 120000) return;
       const bar = document.getElementById('bottombar');
-      if (!bar || !bar.offsetParent) return;
-      clearInterval(iv);
+      if (!bar || !bar.offsetParent) { setTimeout(look, 700); return; }
       if (document.querySelector('.term.trading-win')) return;
       try { StationUI.h.openTerm('trading'); } catch (e) { console.warn('[trading] could not open the desk on launch:', e && e.message); }
-    }, 700);
+    })();
   })();
 })();

@@ -48,35 +48,21 @@ A.ok(C.length >= 80, 'the live catalog surface loaded (' + C.length + ' classes 
 /* ---------- 1. REAL ASKS land on the RIGHT class ---------- */
 // Each of these is a phrasing a Commander would actually type, and each names a class that owns that outcome.
 const HITS = [
-  ['read this contract before I sign it', 'paralegal'],
-  ['can you check this lease for anything that will bite me', 'paralegal'],
-  ['help me get my internet bill lowered', 'negotiator'],
-  ['I want a refund for this purchase, build me a case', 'negotiator'],
-  ['tailor my resume to this job posting', 'jobhunter'],
-  ['prep me for an interview next week', 'jobhunter'],
-  ['rewrite this so it sounds like me, not like an AI', 'ghostwriter'],
-  ['work through this backlog overnight while I sleep', 'nightwatch'],
-  ['split this across the crew and run it in parallel', 'foreman'],
-  ['find me monetizable opportunities that fit my skills', 'opportunist'],
-  // second-wave classes. These also guard the CORPUS: every class added widens the document-frequency pool and
-  // can silently steal or tie a match that used to work (adding sentinel tied "internet bill" against negotiator
-  // on the word "internet" until its tagline was reworded). If one of these breaks after a catalog change, the
-  // fix is the class COPY — give the class the words its users actually type — never a lowered threshold.
-  ['write a spec for this feature', 'drafter'],
-  ['collect all these listings into one spreadsheet', 'harvester'],
-  ['what can strangers find out about me online', 'sentinel'],
-  ['plan out what I am cooking this week', 'provisioner'],
-  ['hold me to the commitments I made', 'taskmaster'],
-  ['organize my medical records before the appointment', 'medic'],
-  ['draft the difficult message I keep avoiding', 'diplomat'],
-  // third wave — the ship-your-app lane, marketing sub-niches, and business roles
-  ['audit my app for security holes', 'auditor'],
-  ['my build fails when I deploy', 'deployer'],
-  ['test my app and tell me what breaks', 'apptester'],
-  ['design the database tables for this', 'dbhelper'],
-  ['write a welcome email sequence for new signups', 'copywriter'],
-  ['redesign my website pages', 'webdesigner'],
-  ['draft replies to these customer support questions', 'support'],
+  // TRADE GOD: the trading floor — the crew role that owns each trading outcome. (StarNet's life, work and app
+  // classes were retired with its catalog; asks that still have a ready-made job land on that recipe.)
+  ['my bot keeps losing trades, retrain it', 'agentcoach'],
+  ['argue the bear case against this trade', 'bear'],
+  ['connect my oanda broker account', 'brokerlink'],
+  ['what is the crowd sentiment on bitcoin', 'sentiment'],
+  ['hedge my portfolio with options', 'options'],
+  ['watch my positions overnight while I sleep', 'nightwatch'],
+  ['find gold and silver trade setups', 'metals'],
+  ['measure my win rate and drawdown', 'performance'],
+  ['split this across the crew and run it in parallel', 'cio'],
+  ['read this contract before I sign it', 'contract-read'],
+  ['help me get my internet bill lowered', 'bill-negotiate'],
+  ['hold me to the commitments I made', 'promises-made'],
+  ['draft replies to these customer support questions', 'steward'],
   ['write a job description to hire someone', 'hiring'],
   ['write an SOP for this process', 'processwriter']
 ];
@@ -97,7 +83,7 @@ for (const [q, id] of HITS) {
 // NOTE these use the DISPLAY names, which are deliberately plain-English (2026-08-03: the station-flavour names
 // — paralegal, nightwatch, harvester — were renamed after Andrew reported they read as abstract). The catalog
 // ids stayed put, so a rename only ever moves what a user can SAY to reach a class, never a saved agent.
-for (const [q, id] of [['i need a legal assistant to check this', 'paralegal'], ['get me a ghostwriter', 'ghostwriter'], ['can I get a home manager', 'provisioner']]) {
+for (const [q, id] of [['i need a risk manager', 'riskmanager'], ['get me a news scout', 'researcher'], ['can I get a metals specialist', 'metals']]) {
   const m = IO.match(q, C);
   A.ok(!!m && m.id === id, 'naming the class outright offers it: "' + q + '"');
 }

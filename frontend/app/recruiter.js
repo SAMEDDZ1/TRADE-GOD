@@ -144,7 +144,10 @@
       const profAff = (opts.profile && typeof opts.profile.score === 'function') ? (Number(opts.profile.score(cls.tags || {})) || 0) : 0;
       const outcomePreference = preferenceFor(cls);
 
-      const v = kitAff * W_KIT + gap * W_GAP + Math.min(dossierHits, 3) * W_DOSSIER + profAff * W_PROFILE + outcomePreference * 3;
+      // a class whose own dominant tag IS the tag of the Commander's main work outranks one that merely shares the
+      // lane (code work → a code-first class before a research class that can also open a terminal)
+      const tagMatch = (cTag && domLaneTag && cTag === domLaneTag) ? 1 : 0;
+      const v = kitAff * W_KIT + gap * W_GAP + tagMatch * W_PROFILE + Math.min(dossierHits, 3) * W_DOSSIER + profAff * W_PROFILE + outcomePreference * 3;
       // (only classes the Commander's work actually TOUCHES are eligible — a zero-kit-affinity class has no honest
       // workflow reason to be "curated", so it never surfaces even if the dossier keyword-matches.)
       if (kitAff <= 0) return;

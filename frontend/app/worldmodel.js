@@ -534,8 +534,8 @@ const WorldModel = (() => {
      never a gate — sandbox law), and hand-placed bays simply have none. */
   const BAY_ROLES = {
     RESEARCHER: { desc: 'digs sources & builds the brief', cls: 'researcher' },
-    WRITER:     { desc: 'drafts the result',               cls: 'writer' },
-    ENGINEER:   { desc: 'works the code lane',             cls: 'engineer' },
+    WRITER:     { desc: 'drafts the result',               cls: 'journal' },
+    ENGINEER:   { desc: 'works the code lane',             cls: 'dataeng' },
     GENERALIST: { desc: 'handles everything else',         cls: 'chief' },
     CREW:       { desc: 'works its share of the stream',   cls: 'chief' },
     SHIPPER:    { desc: 'finishes the job & ships it',     cls: 'chief' },
