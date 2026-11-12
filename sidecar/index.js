@@ -980,7 +980,9 @@ const CREDITS_LOW_USD = (() => { const n = Number(ENV('CREDITS_LOW_USD')); retur
 // flipped in the same breath, as `CREDITS.live` in website/site.js — the site's buy buttons and the app's link
 // button have to tell the same story on the same day. An explicit STARNET_CLOUD_URL always wins, so operators
 // and this repo's own live tests can point at a local service without touching the flag.
-const CLOUD_LIVE = true;                                    // ← launch switch: flip WITH website/site.js CREDITS.live
+// TRADE GOD: OFF. account.starnetos.com is StarNet's paid service, not ours — TRADE GOD runs on the Commander's own
+// provider keys. Set STARNET_CLOUD_URL only if you run a compatible credits service of your own.
+const CLOUD_LIVE = false;
 const CLOUD_URL_DEFAULT = 'https://account.starnetos.com';   // the deployed TRADE GOD Cloud (see starnet-cloud)
 const CLOUD_URL = String(ENV('CLOUD_URL') || (CLOUD_LIVE ? CLOUD_URL_DEFAULT : '')).trim();
 // The linked station's device token, injected by the DESKTOP from the OS keychain at spawn (keychain account
@@ -13077,7 +13079,10 @@ sse.add({
    self-hosted one, a test); STARNET_REMOTE_RELAY=off turns the relay off (hermetic tests, air-gapped installs).
    With no relay the desk says so plainly instead of pretending phones can connect. Nothing dials out unless the
    Commander switches Remote on. */
-const REMOTE_RELAY_LIVE = true;
+// TRADE GOD: OFF by default. remote.starnetos.com is StarNet's relay; TRADE GOD does not route your phone through another
+// company's server. Deploy relay/ yourself and set STARNET_REMOTE_RELAY=<url> to use the phone app. Telegram approvals
+// (/approve /reject /trades /halt) need no relay.
+const REMOTE_RELAY_LIVE = false;
 const REMOTE_RELAY_DEFAULT = 'https://remote.starnetos.com';
 const REMOTE_RELAY_RAW = String(ENV('REMOTE_RELAY') || '').trim();
 const REMOTE_RELAY_URL = (/^(off|none|false|0)$/i.test(REMOTE_RELAY_RAW) ? '' : (REMOTE_RELAY_RAW || (REMOTE_RELAY_LIVE ? REMOTE_RELAY_DEFAULT : ''))).replace(/\/+$/, '');
