@@ -64,6 +64,16 @@
       // Brief gate stands between "show me" and the window; the page obeys only the run they are watching. Deferred: found by
       // tool_search "show open window" (the manual's navigation section names it), so it costs no prompt bytes.
       { capId: 'stationinfo', tool: 'station.show', scope: 'read', requiresConsent: false, network: false, deferred: true },
+      // TRADE GOD — THE TRADING DESK (tools/builtin/trading.js). Trading IS this app, so every crew member can read the
+      // market and pitch a trade, the way every employee of a trading firm can. None of these can place an order: a
+      // proposal becomes a ticket that the Coach gate, the risk engine, the Trading Council and (by default) the
+      // Commander's approval all stand between and the paper account. No limit, setting, broker or kill switch is
+      // reachable from here. A distinct capId ('trading', never 'compute' — resolve.js treats compute as the gate).
+      { capId: 'trading', tool: 'trading.market', scope: 'read', requiresConsent: false, network: false },
+      { capId: 'trading', tool: 'trading.desk', scope: 'read', requiresConsent: false, network: false },
+      { capId: 'trading', tool: 'trading.propose', scope: 'write', requiresConsent: false, network: false },
+      { capId: 'trading', tool: 'trading.argue', scope: 'write', requiresConsent: false, network: false },
+      { capId: 'trading', tool: 'trading.backtest', scope: 'read', requiresConsent: false, network: false, deferred: true },
       // Host-scoped scheduled scratchpad: the computer is present on every runnable station, while the tool
       // itself refuses any run without a host-minted cronJobId. This does not grant general notebook access.
       { capId: 'routinescratch', tool: 'routine.notepad', scope: 'write', requiresConsent: false, network: false },

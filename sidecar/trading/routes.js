@@ -261,7 +261,8 @@ function makeTradingRoutes(deps) {
     }) }
   ];
 
-  return { routes, service: svc, pump, stopDriver, feedInfo };
+  // the crew's tools (sidecar/tools/builtin/trading.js) read candles through the same source the window does
+  return { routes, service: svc, pump: async () => { ensureDriver(); await pump(); }, stopDriver, feedInfo, candles: candlesFor };
 }
 
 // keep at most `max` points of a curve (first, last and an even stride between) so a long backtest stays a small response

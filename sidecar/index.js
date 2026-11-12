@@ -282,7 +282,8 @@ const { makeDiagnostics, proxyHostOnly } = require('./diagnostics.js');   // T3.
 const LiveDoctor = require('./live-doctor.js');                           // opt-in bounded live proof + secret-free receipt
 const { makeStationInspectTool } = require('./tools/builtin/station-inspect.js');
 const { makeManualReadTool } = require('./tools/builtin/manual-read.js');   // manual.read — the operator manual's reference sections, on demand
-const { makeStationShowTool } = require('./tools/builtin/station-show.js');   // station.show — the agent opens a TRADE GOD window/tab for the Commander (frontend/app/places.js)
+const { makeStationShowTool } = require('./tools/builtin/station-show.js');
+const { makeTradingTools } = require('./tools/builtin/trading.js');   // TRADE GOD: trading.market / desk / propose / argue / backtest — proposals only, never orders   // station.show — the agent opens a TRADE GOD window/tab for the Commander (frontend/app/places.js)
 const memcore = require('./memcore.js');
 const { makeConsentBroker } = require('./permissions.js');
 const { makeGrantManager } = require('./permgrants.js');
@@ -23307,6 +23308,8 @@ async function runOnceCore(o) {
   makeManualReadTool().register(registry);   // same always-present COMPUTER grant: the manual's reference sections, verbatim
   // ...and SHOWING it: open any TRADE GOD place on the Commander's screen. The page obeys only the run they are watching.
   makeStationShowTool({ station: stationBridge }).register(registry);
+  // TRADE GOD: the desk tools. The proposer/arguer is THIS run's agent (closed over here), never an argument.
+  makeTradingTools({ desk: tradingDesk, agentId }).register(registry);
   // PLUGIN AUTHORING is not offered to runs (no grant — see capability/registry.js): the crew builds APPS, not plugins
   makeAppTools({ apps, now: () => Date.now(), compile: (source, file) => { try { new (require('node:vm').Script)('(function (exports, require, module, __filename, __dirname) {' + source + '\n})', { filename: file }); return ''; } catch (e) { return String((e && e.message) || e); } } }).register(registry);   // APPS (computer grant, deferred): create / write / publish / schedule
   // STUDIO media tools, built up-front so browser.vision can borrow its multimodal analyze path

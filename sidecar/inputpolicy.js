@@ -37,7 +37,7 @@ const IMPACT_SET = new Set(Object.keys(IMPACTS).map(k => IMPACTS[k]));
 // it cannot even call what it finds, it only makes it advertisable. Same live-caught failure as 'taskbrief'
 // above: without an entry here it fell through to EXTERNAL_UNKNOWN and the authority layer refused it, so
 // every DEFERRED tool became permanently unreachable while looking, from the outside, merely "not found".
-const SAFE_BUILTIN_CAPS = new Set(['compute', 'cabinet', 'memory', 'quest', 'studio', 'orchestrator', 'taskbrief', 'toolsearch', 'code', 'stationinfo']);
+const SAFE_BUILTIN_CAPS = new Set(['compute', 'cabinet', 'memory', 'quest', 'studio', 'orchestrator', 'taskbrief', 'toolsearch', 'code', 'stationinfo', 'trading']);
 
 function impactOfTool(tool) {
   tool = tool || {};
@@ -285,7 +285,7 @@ function enforceSyntheticOnly(resolved, remoteDesktopAuthorized) {
    manual.read) its prompt tells it to call. Named, never derived ("every family without a row"): that would fail
    OPEN for 'code' (execute + consent, the SECURITY STOPGAP in tools/builtin/code.js) and 'apps' (deferred write
    tools), which a restricted routine deliberately does NOT keep — and for any family added later. */
-const TOOLSET_FREEBIES = new Set(['quest', 'toolsearch', 'taskplan', 'deliverable', 'stationinfo', 'routinescratch']);
+const TOOLSET_FREEBIES = new Set(['quest', 'toolsearch', 'taskplan', 'deliverable', 'stationinfo', 'routinescratch', 'trading']);   // TRADE GOD: the desk tools only ever make proposals
 
 /* Per-run toolsets are attenuation only: null preserves the station grant, while an explicit array
    intersects it. Compute and the TOOLSET_FREEBIES above are not toggleable tool families. */

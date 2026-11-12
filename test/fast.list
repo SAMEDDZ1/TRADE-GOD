@@ -1807,3 +1807,4 @@ test/trading.service.test.js
 test/trading.feeds.test.js
 test/trading.oanda.test.js
 test/trading.routes.test.js
+test/trading.tools.test.js
