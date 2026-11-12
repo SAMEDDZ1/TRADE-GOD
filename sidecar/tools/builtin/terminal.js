@@ -1,0 +1,280 @@
+/* sidecar/tools/builtin/terminal.js — model-facing tools for owned PTY / ConPTY sessions. */
+'use strict';
+
+const Shell = require('./shell.js');
+const RunPaths = require('../../run-paths.js');
+const { hardlineReason } = require('../../pathtrust.js');
+
+function makeTerminalTools(deps) {
+  deps = deps || {};
+  const manager = deps.manager;
+  const environment = deps.environment;
+  const fs = deps.fs;
+  const P = deps.pathMod;
+  const ROOT = deps.root;
+  const platform = deps.platform || process.platform;
+  const isWin = platform === 'win32';
+  const envFor = typeof deps.envFor === 'function' ? deps.envFor : (() => process.env);
+  if (!manager || !environment || !fs || !P || !ROOT) throw new Error('terminal tools require manager, environment, fs, pathMod, and root');
+  // the host's LIVE answer to "is this project root still approved?" (index.js isBlessedRoot). A cwd argument inside the
+  // run's root is honoured only while it is; a rig without the check keeps the run's host-minted root as its authority.
+  const rootApproved = typeof deps.rootApproved === 'function' ? deps.rootApproved : null;
+  const realOf = (p) => (typeof fs.realpathSync === 'function' ? fs.realpathSync(p) : p);
+  // asked by the root's REAL path (review round 2): isBlessedRoot is an exact (case-folded) key match, and the run's root
+  // arrives as the caller spelled it (a trailing separator, a link), so a still-approved root read as revoked
+  function rootIsApproved(root) {
+    if (!rootApproved) return true;
+    let real;
+    try { real = realOf(root); }
+    catch (e) { require('../../failopen.js').note('terminal.root.real', e); return false; }   // gone: no longer a place to open terminals
+    return rootApproved(real) === true;
+  }
+
+  function aid(ctx) { return Shell.safeAgentId((ctx && ctx.agentId) || 'agent'); }
+  function remoteOwner(ctx) { return Shell.unrestrictedHost(ctx); }
+  // the run's path object (sidecar/run-paths.js): ctx.paths in a real run, minted from these deps in a rig
+  let pathsResolver = null;
+  function runPaths(ctx, agentId) {
+    if (!pathsResolver) pathsResolver = RunPaths.makeResolver({ pathMod: P, root: ROOT, environment });
+    return RunPaths.pathsFor(ctx, pathsResolver, agentId);
+  }
+  function resolveCwd(args, ctx, agentId) {
+    const jailRoot = environment.ensureWorkspace(agentId);
+    const paths = runPaths(ctx, agentId);
+    // The terminal opens where THIS run's next shell command would (Shell.runShellCwd): the run's project root
+    // (host-minted, re-validated before it entered the run) or the private workspace, then the run's own `cd`. It
+    // read the run's projectCwd field alone, so a project conversation's terminal opened in the private workspace
+    // while its shell and fs.* worked in the project. A PTY runs on the host only, so the backend here is always local.
+    // confine: an inherited shell `cd` outside the private workspace and the project root (by real path) is not
+    // followed — a plain shell.exec {cwd:"<any folder>"} must not become where this terminal opens (review S1)
+    let cwd = Shell.runShellCwd({ paths, environment, backendId: 'local', agentId, jailRoot, pathMod: P, fs, root: ROOT, isWin, remoteOwner: remoteOwner(ctx), confine: true });
+    // User/model args stay inside the private workspace, or inside the run's own project root — the folder this
+    // run's shell and fs.* already work in — unless a separately minted remote-owner authority exists.
+    if (args && args.cwd != null) {
+      const wanted = String(args.cwd).trim();
+      const norm = Shell.normalizeWinCwd(P, wanted, isWin);
+      const lexical = P.isAbsolute(norm) || /^[A-Za-z]:[\\/]/.test(norm) ? P.resolve(norm) : P.resolve(cwd, norm);
+      // inside the project by its REAL path too: a link or junction planted in the project cannot carry the cwd out,
+      // and only while the host still approves that root (a revoked project stops being a place to open terminals)
+      let inRoot = false;
+      if (paths.root && !/^[\\/]{2}/.test(wanted) && Shell.withinJail(P, lexical, paths.root) && typeof fs.realpathSync === 'function'
+        && rootIsApproved(paths.root)) {
+        try { inRoot = Shell.withinJail(P, fs.realpathSync(lexical), fs.realpathSync(paths.root)); }
+        catch (e) { require('../../failopen.js').note('terminal.cwd.real', e); }   // not there: resolveShellCwd names why
+      }
+      cwd = Shell.resolveShellCwd({ pathMod: P, fs, requested: args.cwd, current: cwd, jailRoot, root: ROOT, isWin, allowExternal: remoteOwner(ctx) || inRoot, allowProtected: remoteOwner(ctx) });
+    }
+    return { cwd, jailRoot };
+  }
+  function safety(command, cwd, ctx, exactCwd) {
+    if (remoteOwner(ctx)) return null;
+    const escaped = Shell.escapesWorkspace(command);
+    if (escaped) return { kind: 'workspace', reason: escaped };
+    // a new terminal's program is searched for in the environment its PTY is given (manager.start gets envFor); text typed later proves nothing
+    return Shell.commandSafetyRisk(command, { cwd, exactCwd: exactCwd === true, fs, pathMod: P, dialect: isWin ? 'cmd' : 'posix', isWin, env: exactCwd === true ? envFor(ctx && ctx.surface) : undefined });
+  }
+  /* THE REAL FOLDER IS ONE OF THIS RUN'S (review round 2). A junction inside the private workspace named as the cwd
+     ("jx" -> a folder elsewhere) passed every lexical check and opened the PTY outside. Unless a remote-owner authority
+     exists, the real cwd lies inside the real private workspace, or inside the real project root while the host still
+     approves it, and is not a protected folder. Returns the real cwd; throws the refusal. terminal.start asks it BEFORE
+     its checkpoint and again after it (lane checkpoint-links: a refused start snapshots nothing). */
+  function admitRealCwd(where, ctx, agentId) {
+    let realCwd;
+    try { realCwd = realOf(where.cwd); }
+    catch (e) { throw new Error('the terminal folder could not be resolved, so nothing was started (' + ((e && e.message) || e) + ')'); }
+    if (remoteOwner(ctx)) return realCwd;
+    const paths = runPaths(ctx, agentId);
+    let inJail = false, inRoot = false;
+    try { inJail = Shell.withinJail(P, realCwd, realOf(where.jailRoot)); }
+    catch (e) { require('../../failopen.js').note('terminal.jail.real', e); }
+    if (!inJail && paths.root && rootIsApproved(paths.root)) {
+      try { inRoot = Shell.withinJail(P, realCwd, realOf(paths.root)); }
+      catch (e) { require('../../failopen.js').note('terminal.root.real', e); }
+    }
+    if (!inJail && !inRoot) throw new Error('the terminal folder is outside your workspace' + (paths.root ? ' and this run\'s project folder' : '') + ' by its real path (a link inside points out), so nothing was started');
+    // NOT IN A PROTECTED FOLDER (review round 3): a cwd of ".git" (or ~/.ssh, a credential store) inside the run's own
+    // folders opened the PTY there. The real folder the PTY would start in meets the same floor a file does.
+    if (hardlineReason(realCwd, realCwd)) throw new Error('the terminal folder is a protected folder (repository internals or credentials), so nothing was started; start it in the project or workspace folder instead');
+    return realCwd;
+  }
+  function sessionRef(args) { return String((args && args.session) || '').trim(); }
+  function fail(r) { if (!r || !r.ok) throw new Error((r && r.error) || 'terminal operation failed'); return r; }
+  function terminalSummary(s) {
+    return '[' + s.name + '] ' + String(s.state || 'unknown').toUpperCase()
+      + ' · ' + s.cols + 'x' + s.rows
+      + (s.pid ? ' · pid ' + s.pid : '')
+      + (s.exitCode != null ? ' · exit ' + s.exitCode : '')
+      + (s.reason ? ' · ' + s.reason : '');
+  }
+
+  const startTool = {
+    name: 'terminal.start', capability: 'workbench', impact: 'workspace-process', scope: 'execute', requiresConsent: true,
+    description: 'Start a named interactive terminal session in your workspace using a real PTY/ConPTY. Use this '
+      + 'for REPLs, interactive CLIs, and long-running commands that need terminal behavior. The session survives '
+      + 'agent turns while this TRADE GOD process lives; use terminal.read/write/resize/interrupt/stop to control it.',
+    schema: {
+      type: 'object', required: ['name', 'command'],
+      properties: {
+        name: { type: 'string' }, command: { type: 'string' }, cwd: { type: 'string' },
+        cols: { type: 'number' }, rows: { type: 'number' }
+      }
+    },
+    run: async function (args, ctx) {
+      const agentId = aid(ctx), command = String((args && args.command) || '').trim();
+      if (!command) throw new Error('empty command');
+      // Lane C: a PTY is spawned on the HOST by node-pty. If this agent's profile asks for a sandbox, the
+      // terminal must not quietly escape it — honor the sandbox or refuse, with the fix named.
+      const refusal = typeof environment.refusalFor === 'function' ? environment.refusalFor(agentId) : null;
+      if (refusal) throw refusal;
+      const resolution = typeof environment.resolutionFor === 'function' ? environment.resolutionFor(agentId) : null;
+      const environmentBackendId = resolution ? resolution.id : (typeof environment.backendIdFor === 'function' ? environment.backendIdFor(agentId) : environment.backendId);
+      if (environmentBackendId !== 'local') {
+        const e = new Error('interactive terminals run on the host; this agent is sandboxed (profile ' + String((resolution && resolution.profileId) || 'unknown') + ' → ' + environmentBackendId + '). Use shell.exec inside the sandbox, or change the agent execution profile to Trusted Project or This Computer.');
+        e.precondition = { code: 'terminal_requires_local_backend', requiredState: 'local_execution_backend', requiredAction: 'use_shell_exec_or_change_execution_profile' };
+        throw e;
+      }
+      const where = resolveCwd(args, ctx || {}, agentId);
+      const risk = safety(command, where.cwd, ctx || {}, true);   // a new terminal's folder is this one; text typed later is not
+      if (risk) throw new Error('refused [' + risk.kind + ']: this terminal command ' + risk.reason);
+      // ADMITTED BEFORE THE CHECKPOINT (lane checkpoint-links): a start refused by its real folder snapshots nothing
+      const firstReal = admitRealCwd(where, ctx || {}, agentId);
+      if (ctx && typeof ctx.checkpointMutation === 'function') {
+        try { await ctx.checkpointMutation(where.cwd, 'terminal.start', { always: true }); } catch (_) {}
+      }
+      /* CHECK, THEN USE THE SAME FOLDER (review minor). The checkpoint await is a window in which a folder proven inside
+         the project could be swapped for a link pointing out. Prove it again after the await, and start the PTY in the
+         REAL folder that proof saw, never in a name that could be re-pointed between the check and the spawn. */
+      const again = resolveCwd(args, ctx || {}, agentId);
+      let realCwd;
+      try { realCwd = realOf(again.cwd); if (realOf(where.cwd) !== realCwd || realCwd !== firstReal) throw new Error('changed'); }
+      catch (e) { throw new Error('the terminal folder changed while the session was being prepared, so nothing was started — try again (' + ((e && e.message) || e) + ')'); }
+      admitRealCwd(again, ctx || {}, agentId);
+      const result = fail(manager.start({
+        agentId, name: args.name, command, cwd: realCwd, cols: args.cols, rows: args.rows,
+        env: envFor(ctx && ctx.surface)
+      }));
+      const durable = result.persisted ? ' Metadata is durable.' : ' WARNING: metadata could not be persisted; this session exists only in the current sidecar life.';
+      return {
+        content: terminalSummary(result.session) + '\nStarted as ' + result.session.sessionId + '.' + durable
+          + '\nRead output with terminal.read {session:"' + result.session.name + '"}.',
+        summary: 'terminal ' + result.session.name + ' started'
+      };
+    }
+  };
+
+  /* IMPACT (declared, never inferred). start/write are workspace-process: they run commands. resize/interrupt/stop are
+     none: they act only on THIS agent's own sessions (manager calls are keyed by aid(ctx)), start nothing, send no input
+     a shell could run and reach no network. Ctrl-C and stop end work, like shell.bg.kill; resize only redraws.
+     status and read are external-unknown, DECLARED, and deliberately the lane they always fell into. They hand back
+     what a session holds (read: its scrollback; status: its command line, folder and output file), and sessions are
+     keyed by AGENT, not by run, so as impact none they were offered, with no grant, to every run of that agent whose
+     station holds the WORKBENCH (a delegated worker's kit, a bay room with one placed), on any surface and tainted or
+     not, which could then read and repeat the output of a terminal the Commander had that agent open. In this lane a
+     watched run asks an exact per-call confirmation, an unattended ASK run (a routine granted the terminal included)
+     is not offered them, a tainted run loses them, and an owner DM or Full Access keeps them. Declaring them none
+     (quick win 8) was reverted in review; a rule scoped to the run that started the session waits for Andrew's
+     security sign-off. briefExempt keeps them what they were in 0.14.1 before the Task Brief settles: a read the model
+     may make while it researches (taskbrief-policy canMutate holds a scope-read tool only when it DECLARES
+     external-unknown, the rule for MCP reads; undeclared, these passed). */
+  const statusTool = {
+    name: 'terminal.status', capability: 'workbench', impact: 'external-unknown', scope: 'read', requiresConsent: false,
+    briefExempt: true,
+    description: 'List your terminal sessions, or inspect one by name/id. Lifecycle truth includes whether the '
+      + 'process is attached in this sidecar life; prior-life sessions are reported unknown, never falsely running.',
+    schema: { type: 'object', properties: { session: { type: 'string' } } },
+    run: function (args, ctx) {
+      const agentId = aid(ctx), ref = sessionRef(args);
+      if (ref) {
+        const s = manager.status(agentId, ref);
+        if (!s) return { content: 'No terminal session "' + ref + '".', summary: 'not found' };
+        return { content: terminalSummary(s) + '\n' + JSON.stringify(s), summary: s.name + ' ' + s.state };
+      }
+      const rows = manager.status(agentId);
+      const health = manager.storeHealth();
+      if (!rows.length) return { content: 'No terminal sessions. Metadata store: ' + JSON.stringify(health), summary: '0 terminals' };
+      return { content: rows.map(terminalSummary).join('\n') + '\nMetadata store: ' + JSON.stringify(health), summary: rows.length + ' terminal(s)' };
+    }
+  };
+
+  const readTool = {
+    name: 'terminal.read', capability: 'workbench', impact: 'external-unknown', scope: 'read', requiresConsent: false,
+    briefExempt: true,
+    description: 'Read bounded scrollback from one terminal. Pass the returned nextOffset on the next call to '
+      + 'continue without duplicates. If old output fell out of the bounded ring, truncatedStart says so explicitly.',
+    schema: {
+      type: 'object', required: ['session'],
+      properties: { session: { type: 'string' }, offset: { type: 'number' }, maxChars: { type: 'number' } }
+    },
+    run: function (args, ctx) {
+      const r = fail(manager.read(aid(ctx), sessionRef(args), { offset: args.offset, maxChars: args.maxChars }));
+      const saved = r.session.outputSpillVerified
+        ? '; full ' + r.session.outputBytes + '-byte output saved once at ' + runPaths(ctx, aid(ctx)).placeJail(r.session.outputPath) + ' (page with fs.read)'
+        : (r.session.outputSpillError ? '; durable output spill failed: ' + r.session.outputSpillError : '');
+      const note = '[offset ' + r.offset + '→' + r.nextOffset + ' of ' + r.endOffset
+        + (r.truncatedStart ? '; earlier output left the bounded scrollback' : '') + saved
+        + (r.hasMore ? '; more available' : '') + ']';
+      return { content: (r.output || '(no output)') + '\n' + note + '\n' + terminalSummary(r.session), summary: r.output.length + ' chars · ' + r.session.state };
+    }
+  };
+
+  const writeTool = {
+    name: 'terminal.write', capability: 'workbench', impact: 'workspace-process', scope: 'execute', requiresConsent: true,
+    description: 'Send text to a running terminal. By default submits it with Enter; set submit:false for '
+      + 'character-at-a-time input. Input is screened like a shell command because a terminal can execute it.',
+    schema: {
+      type: 'object', required: ['session', 'data'],
+      properties: { session: { type: 'string' }, data: { type: 'string' }, submit: { type: 'boolean' } }
+    },
+    run: async function (args, ctx) {
+      const agentId = aid(ctx), ref = sessionRef(args), data = String(args.data == null ? '' : args.data);
+      if (!data) throw new Error('empty input');
+      const s = manager.status(agentId, ref);
+      if (!s) throw new Error('no such terminal session');
+      const risk = safety(data, s.cwd, ctx || {});
+      if (risk) throw new Error('refused [' + risk.kind + ']: this terminal input ' + risk.reason);
+      if (ctx && typeof ctx.checkpointMutation === 'function') {
+        try { await ctx.checkpointMutation(s.cwd, 'terminal.write', { always: true }); } catch (_) {}
+      }
+      const r = fail(manager.write(agentId, ref, { data, submit: args.submit }));
+      return { content: 'Sent ' + r.bytes + ' byte(s) to ' + r.session.name + '. Read the response with terminal.read.', summary: 'terminal input sent' };
+    }
+  };
+
+  const resizeTool = {
+    name: 'terminal.resize', capability: 'workbench', impact: 'none', scope: 'write', requiresConsent: false,
+    description: 'Resize a running terminal so full-screen and width-sensitive programs redraw correctly.',
+    schema: { type: 'object', required: ['session', 'cols', 'rows'], properties: { session: { type: 'string' }, cols: { type: 'number' }, rows: { type: 'number' } } },
+    run: function (args, ctx) {
+      const r = fail(manager.resize(aid(ctx), sessionRef(args), args.cols, args.rows));
+      return { content: 'Resized ' + r.session.name + ' to ' + r.session.cols + 'x' + r.session.rows + (r.persisted ? '.' : ' (metadata is not durable).'), summary: r.session.cols + 'x' + r.session.rows };
+    }
+  };
+
+  const interruptTool = {
+    name: 'terminal.interrupt', capability: 'workbench', impact: 'none', scope: 'write', requiresConsent: false,
+    description: 'Send Ctrl-C to a running terminal. This reports that the interrupt was sent; inspect status/read '
+      + 'to learn what the process actually did.',
+    schema: { type: 'object', required: ['session'], properties: { session: { type: 'string' } } },
+    run: function (args, ctx) {
+      const r = fail(manager.interrupt(aid(ctx), sessionRef(args)));
+      return { content: 'Sent Ctrl-C to ' + r.session.name + '. Its resulting state is not assumed; check terminal.status/read.', summary: 'interrupt sent' };
+    }
+  };
+
+  const stopTool = {
+    name: 'terminal.stop', capability: 'workbench', impact: 'none', scope: 'write', requiresConsent: false,
+    description: 'Request stop for one of your terminal sessions. The whole owned process tree is targeted. This '
+      + 'does not claim exit until the PTY emits its actual exit event; check terminal.status.',
+    schema: { type: 'object', required: ['session'], properties: { session: { type: 'string' } } },
+    run: function (args, ctx) {
+      const r = fail(manager.stop(aid(ctx), sessionRef(args)));
+      if (r.alreadyExited) return { content: terminalSummary(r.session), summary: 'already ' + r.session.state };
+      return { content: 'Stop requested for ' + r.session.name + '; awaiting its exit event. Check terminal.status.', summary: 'stop requested' };
+    }
+  };
+
+  const all = [startTool, statusTool, readTool, writeTool, resizeTool, interruptTool, stopTool];
+  return { tools: all, register: function (registry) { all.forEach(t => registry.register(t)); return registry; }, _internals: { resolveCwd, safety, terminalSummary } };
+}
+
+module.exports = { makeTerminalTools };

@@ -1,0 +1,693 @@
+/* sidecar/loopjob-driver.js — the LOOP tick DRIVER (standing objectives, S1), determinism-split clean.
+
+   The orchestration half of the loop subsystem: it owns the per-tick decision flow (roll each loop's daily
+   budget bucket → ask the pure gate whether an iteration may fire → CLAIM + persist BEFORE launching →
+   fire through the injected run host → harvest → settle + persist → ledger the decision) and the in-flight
+   LEASE map. Every ambient dependency is INJECTED — there is NO Date.now / Math.random / new Date() /
+   setInterval / setTimeout / fs / crypto here, so it passes test/lint-determinism.js and is headless-testable
+   with a fake clock + a fake runOnce, exactly like cron-driver.js and nightshift-driver.js. The ambient half
+   — the real setInterval, Date.now, crypto.randomUUID, the loops.json load/persist, the boot reconcile —
+   lives ONLY in sidecar/index.js (the lint-exempt composition root).
+
+   makeLoopDriver(deps) -> { applyTick(nowMs) -> {fired,skipped,deferred,planned}, leases:Map, abortAllLeases() }
+
+     deps.getLoops()        -> LoopJob[]           // read the live store (index.js mirror)
+     deps.setLoops(loops)   -> bool                // replace + PERSIST; FALSE means the write did not reach
+                                                   //   disk, and the driver then fires NOTHING this tick
+     deps.runOnce(opts)     -> Promise<result>     // the SAME run host the browser uses (index.js runOnce)
+     deps.newId()           -> string              // a fresh runId (crypto.randomUUID in index.js)
+     deps.newAbort()        -> AbortController
+     deps.now()             -> int ms              // wall clock for COMPLETION timestamps (a run settles long
+                                                   //   after applyTick's nowMs is stale)
+     deps.isHalted()        -> bool                // the durable station E-STOP
+     deps.concurrencyFree(agentId) -> bool         // the agent's run mutex
+     deps.agentExists(agentId)     -> bool         // a loop whose agent was deleted must STOP, never fire
+     deps.precheck({loop})  -> {ok,reason}|bool    // OPTIONAL purely-local readiness (credential, workdir still
+                                                   //   blessed). A stand-down no model call could have avoided
+                                                   //   must not cost money — nightshift's NS-2 cold-leash fix.
+     deps.identityForAgent(agentId, loop) -> {system?, model?} | null
+     deps.providerForLoop(loop, ident)    -> string
+     deps.getKey(provider, loop)          -> string
+     deps.hasCredential(provider, key, loop) -> bool
+     deps.defaultModel      -> string
+     deps.persona           -> string | ()=>string // the autonomous system prompt (re-read per fire if a getter)
+     deps.harvest(loop, runResult, iterN) -> {title,summary,commit,files,usd,text} | Promise<...>
+                                                   // OPTIONAL. Where S3 hangs the git work (commit the
+                                                   //   iteration onto the loop branch) and where a non-git loop
+                                                   //   reads its workshop manifest. Default = derive a title
+                                                   //   from the run text and record nothing it cannot prove.
+     deps.ledger(entry)     -> void                // autonomy-ledger append; source:'loop' is already allowed
+     deps.tee(name, payload, {loopId,runId,iteration}) -> void
+                                                   // OPTIONAL per-run event forwarder, so an unattended
+                                                   //   iteration is observable live. The host applies its own
+                                                   //   egress redaction (runTeeView), exactly as cron does.
+     deps.heartbeatMs       -> int                 // throttle for the durable liveness write (30s)
+     deps.maxParallel       -> int                 // loops that may have an iteration in flight at once (4)
+     deps.maxRunMs          -> int                 // zombie-claim ceiling handed to the pure gate as staleMs
+     deps.declineRepeatMs   -> int                 // OPTIONAL: re-log an UNCHANGED stand-down at most this often (1h)
+
+   EDGE-TRIGGERED STAND-DOWNS (2026-10-19, idle-CPU piece 2). The 20s tick used to ledger a 'skip' on EVERY tick a
+   loop sat budget-capped, busy or precheck-blocked (and a 'defer' on every at-capacity tick, and a 'skip' on every
+   no-credential tick): 4,320 fsync'd rows a day per stuck loop, which evicted the night shift's whole trail from the
+   autonomy ledger's 3,000-row RAM ring in under 17 h. These stand-downs now copy nightshift-driver's logDecline: a
+   row lands only when the loop's stand-down reason (kind + binding + reason + note) CHANGES, or once per
+   declineRepeatMs while it holds. The first row of every run is byte-identical to the old per-tick row; a later row
+   (a changed reason, the hourly repeat, or the FIRE that ends the run) carries detail.heldTicks/heldBinding — how
+   many identical ticks the previous logged reason was folded for. Nothing reads per-tick rows for truth: GET
+   /api/loops reads the LIVE gate. The run memory is RAM-only (a restart logs one fresh row per stuck loop, which is
+   true) and pruned for deleted loops. Persist/settlement-failure defers are NEVER folded — they are failure
+   signals, and hiding a failing disk would be a lie.
+
+   NO loop.* BUS EVENTS, DELIBERATELY. shared/events.js is the FROZEN, OWNED contract; it carries no loop.*
+   family and this lane does not get to invent one (additive changes go through the owner). So the driver emits
+   nothing of its own: the LOOPS window polls GET /api/loops exactly as the ROUTINES window polls /api/cron, the
+   durable audit trail rides the autonomy ledger (which already allows source:'loop'), and per-iteration
+   visibility rides `tee` — which forwards the run's EXISTING agent.* contract events. test/lint-emits.js
+   enforces this: an emit of an unregistered event name fails the gate, which is how the first draft's
+   loop.fire/loop.result/loop.tick were caught.
+
+   WHY ADVANCE-BEFORE-RUN MATTERS HERE. A loop has no wall-clock "next fire" to advance, so the crash-safety
+   primitive is the durable fire-claim (loopjob-store.claimFire): stamp it, PERSIST it, and only then launch.
+   If the persist fails we launch nothing — firing over an unpersisted claim is how a crash-restart
+   double-spends. This is the same transactional-dispatch receipt cron-driver.js proved out. */
+'use strict';
+(function (root, factory) {
+  const api = factory(
+    typeof require === 'function' ? require('./loopjob.js') : (root.SK && root.SK.loopjob),
+    typeof require === 'function' ? require('./loopjob-store.js') : (root.SK && root.SK.loopjobStore)
+  );
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else { (root.SK = root.SK || {}).loopjobDriver = api; }
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (LJ, store) {
+  'use strict';
+  // plain words for an unclean end, the machine reason kept in brackets (sidecar/stop-reason.js)
+  const incompleteRunMessage = (typeof require === 'function') ? require('./stop-reason.js').incompleteRunMessage : (r) => 'run ended without completion: ' + (r || 'missing terminal outcome');
+  // TYPED OUTCOMES: how an iteration ended, read through the ONE resolver every surface shares (frontend/app/runoutcome.js)
+  const RunOutcome = (typeof require === 'function') ? require('../frontend/app/runoutcome.js') : ((typeof globalThis !== 'undefined' && globalThis.RunOutcome) || null);
+  // one run's reply, joined the way every reply sink joins it (a steering echo reads '↪ <note>', never the raw marker). Pure.
+  const replyAssembler = (typeof require === 'function') ? require('./reply-assembler.js') : (root.SK && root.SK.replyAssembler);
+  // an error the router made for a saved floor that cannot be proved right now -> { status, why }, else null (routing/saved-hold.js, a leaf)
+  const holdOf = (typeof require === 'function') ? require('./routing/saved-hold.js').holdOf : (e) => (e && e.held === true ? { status: 'unreadable', why: String(e.why || 'the saved floor cannot be proved right now') } : null);
+
+  const DEFAULT_MAX_PARALLEL = 0;          // unlimited; positive values opt into a ceiling
+  const DEFAULT_MAX_RUN_MS = 900000;      // 15 min — the zombie-claim ceiling, extended by live heartbeats
+  const DEFAULT_HEARTBEAT_MS = 30000;     // durable liveness write interval while an iteration streams
+  const DEFAULT_DECLINE_REPEAT_MS = 3600000;   // an unchanged stand-down is re-logged at most hourly (= night shift)
+  const TITLE_WORDS = 12;
+
+  function noop() {}
+  function isFn(v) { return typeof v === 'function'; }
+
+  /* defaultHarvest — what we can honestly say about an iteration knowing ONLY the run result. The title is the
+     model's own first line, trimmed; there is no commit and no file list because this layer performed no git
+     and inspected no disk. S3 injects a real harvest that commits onto the loop branch and returns the sha.
+     Claiming a commit we did not make would be exactly the lie the product forbids. */
+  function defaultHarvest(loop, res) {
+    const text = String((res && res.text) || '');
+    const first = text.split('\n').map(s => s.trim()).filter(Boolean)[0] || '';
+    const title = first.replace(/^[#>*\-\s]+/, '').split(/\s+/).slice(0, TITLE_WORDS).join(' ');
+    return {
+      text: text,
+      title: title || null,
+      summary: text.slice(0, 1200) || null,
+      commit: null,
+      files: [],
+      usd: (res && typeof res.usd === 'number' && isFinite(res.usd)) ? res.usd : 0
+    };
+  }
+
+  function makeLoopDriver(deps) {
+    deps = deps || {};
+    const getLoops = deps.getLoops || (() => []);
+    const setLoops = deps.setLoops || (() => true);
+    const runOnce = deps.runOnce;
+    const newId = deps.newId || (() => 'loop-run');
+    const newAbort = deps.newAbort || (() => ({ abort() {}, signal: null }));
+    const now = deps.now || (() => 0);
+    const isHalted = deps.isHalted || (() => false);
+    const concurrencyFree = deps.concurrencyFree || (() => true);
+    const agentExists = deps.agentExists;
+    const ledger = deps.ledger || noop;
+    const harvest = isFn(deps.harvest) ? deps.harvest : defaultHarvest;
+    const maxParallel = deps.maxParallel != null ? deps.maxParallel : DEFAULT_MAX_PARALLEL;
+    const maxRunMs = deps.maxRunMs != null ? deps.maxRunMs : DEFAULT_MAX_RUN_MS;
+    // how often a live iteration persists its liveness heartbeat. Throttled so the token path never writes.
+    const heartbeatMs = deps.heartbeatMs != null ? deps.heartbeatMs : DEFAULT_HEARTBEAT_MS;
+    const declineRepeatMs = (Number.isFinite(deps.declineRepeatMs) && deps.declineRepeatMs >= 0) ? deps.declineRepeatMs : DEFAULT_DECLINE_REPEAT_MS;
+    const tee = isFn(deps.tee) ? deps.tee : null;
+    /* THE HOST-RUN CHECK (S2). Two hooks, both optional — a loop with no check behaves exactly as before.
+         snapshot(loop) -> Promise<any>   taken BEFORE the iteration runs, so the check can attribute changed
+                                          files to THIS iteration rather than to everything uncommitted.
+         check(loop, { iterN, before }) -> Promise<Verdict>
+       The verdict rides into settleIteration as result.check, where a red lands 'red' (feeds forward) and only
+       a TRUSTED green may complete the objective. Deliberately NOT the model's business: the check command
+       never enters the prompt and no tool can reach it. */
+    const snapshot = isFn(deps.snapshot) ? deps.snapshot : null;
+    const check = isFn(deps.check) ? deps.check : null;
+    /* projectLine(loop) -> string. THE FOLDER THE LOOP WORKS IN, told to the agent.
+
+       A dogfood run against a real repo failed three passes in a row with "the workspace is empty — no
+       src/cart.js": the loop knew its workdir, the path grant allowed it, and the agent was never told the
+       path existed. Relative paths resolve inside the agent's own jail, so a project-shaped loop that does
+       not inject this is asking the agent to edit files it cannot find. The interactive path has always sent
+       this (handleRun -> projectScopeLine); the loop driver simply never did. */
+    const projectLine = isFn(deps.projectLine) ? deps.projectLine : null;
+    /* context(loop) -> Promise<{ text, reachable, why }>. The PROJECT SNAPSHOT, and the proof the folder is
+       readable at all. `reachable:false` ends the pass BEFORE the model call: a pass that cannot see the
+       project can only produce a blind answer, and a blind "0 findings" would otherwise be counted as
+       CONVERGENCE — the loop declaring "nothing left to do" about a project it never opened. A real dogfood
+       run did exactly that. */
+    const context = isFn(deps.context) ? deps.context : null;
+    /* onStopped(loop, prevState) — fired the moment a loop stops being able to continue ON ITS OWN and starts
+       needing the Commander: the review queue filled, it converged, it met its objective, or it parked itself.
+       This is the honest trigger for a notification — not "a candidate appeared", which happens while the loop
+       is still working and would be pure noise. Edge-triggered on the state TRANSITION, so a poll or a restart
+       can never re-announce the same stop. */
+    const onStopped = isFn(deps.onStopped) ? deps.onStopped : null;
+    /* trackRun / untrackRun — register a live iteration in the host's run registry, exactly as the cron,
+       night-shift, workshop and interactive paths do. This is what makes an agent STAY LIT at its desk:
+       GET /api/state/snapshot is built from that registry, and the world's reconnect reconcile clears any
+       agent absent from it — so without this, reloading the app mid-iteration darkens an agent that is
+       genuinely still working. It also lets /api/cancel target a single loop pass. A new host may return a
+       release callback from trackRun; that admission lasts through the actual context/run/check/harvest work.
+       Older hosts keep untrackRun's existing durable-settlement timing. */
+    const trackRun = isFn(deps.trackRun) ? deps.trackRun : null;
+    const untrackRun = isFn(deps.untrackRun) ? deps.untrackRun : null;
+
+    // loopId -> { runId, abort, startedAt }. In-memory only; the DURABLE half is the fire-claim on the record,
+    // which is what survives a restart. Both are consulted by the gate.
+    const leases = new Map();
+    let bootReconciled = false;
+    // loopId -> { key, binding, at, held }: the last LOGGED stand-down per loop (the edge-trigger memory, RAM only).
+    const lastStandDown = new Map();
+
+    function personaOf() {
+      const p = deps.persona;
+      return isFn(p) ? String(p() || '') : String(p || '');
+    }
+
+    function note(kind, loop, extra) {
+      try {
+        ledger(Object.assign({
+          source: 'loop', kind: kind, jobId: loop && loop.id, agentId: loop && loop.agentId
+        }, extra || {}));
+      } catch (_) { /* telemetry must never break a run */ }
+    }
+
+    // ledger a per-tick stand-down iff its reason changed since this loop's last logged one, or the same reason has
+    // held for declineRepeatMs (see EDGE-TRIGGERED STAND-DOWNS). Returns true when written; a suppressed tick only
+    // counts toward the held tally. Mirrors nightshift-driver's logDecline.
+    function noteStandDown(kind, loop, nowMs, extra) {
+      const id = loop && loop.id;
+      const det = (extra && extra.detail) || null;
+      const key = kind + '|' + String(extra.binding || '') + '|' + String(extra.reason || '') + '|' + String((det && det.note) || '');
+      const prev = lastStandDown.get(id);
+      const fresh = !prev || prev.key !== key || !(nowMs >= prev.at) || (nowMs - prev.at) >= declineRepeatMs;
+      if (!fresh) { prev.held += 1; return false; }
+      const out = Object.assign({}, extra);
+      if (prev && prev.held > 0) out.detail = Object.assign({}, det || {}, { heldTicks: prev.held, heldBinding: prev.binding });
+      note(kind, loop, out);
+      lastStandDown.set(id, { key: key, binding: extra.binding, at: nowMs, held: 0 });
+      return true;
+    }
+
+    // a failure row (a persist defer) lands between stand-downs: the run is BROKEN, so the next stand-down is a fresh
+    // edge and the trail never ends on the failure while the loop is actually held for another reason. The held
+    // tally is kept and rides that next row (night shift: its forced persist-failed decline replaces lastDecline).
+    function breakStandDownRun(id) {
+      const prev = lastStandDown.get(id);
+      if (prev) prev.key = null;
+    }
+
+    /* buildMessages — the iteration prompt: the standing objective, then the LEDGER DIGEST. The digest is what
+       makes this a loop rather than a retry storm; see loopjob.digest. */
+    function buildMessages(loop, snapshotText) {
+      const digest = LJ.digest(loop, {});
+      const parts = [loop.objective];
+      // the snapshot goes BEFORE the ledger: what the project looks like RIGHT NOW outranks what happened in
+      // earlier passes, and it is the thing that stops the agent guessing at paths inside its own jail.
+      if (snapshotText) parts.push(snapshotText);
+      if (digest) parts.push(digest);
+      return [{ role: 'user', content: parts.join('\n\n') }];
+    }
+
+    /* settle — record an iteration's outcome durably. Wrapped so that EVERY exit path from a fired run
+       (success, throw, abort) lands here exactly once; an unsettled iteration would hold its claim until the
+       zombie ceiling and stall the loop for maxRunMs. */
+    function settle(loopId, runId, result) {
+      const lease = leases.get(loopId);
+      // A cancelled pass may finish its check/harvest after RESUME has fired a
+      // replacement. Only the current generation can persist or release ownership.
+      if (!lease || lease.runId !== runId) return false;
+      const pending = lease && lease.runId === runId ? lease.settlement : null;
+      const at = pending ? pending.at : now();
+      const prev = store.getLoop(getLoops(), loopId);
+      const prevState = prev && prev.state;
+      const next = store.settleIteration(getLoops(), loopId, Object.assign({ runId: runId }, result), { now: at });
+      let persisted = false;
+      try { persisted = setLoops(next) !== false; } catch (_) { persisted = false; }
+      if (!persisted) {
+        // The iteration already ran. Keep its lease as a settlement receipt and retry only the durable write;
+        // dropping ownership here lets the old fire claim age into a zombie and execute completed work twice.
+        if (lease && lease.runId === runId && !lease.settlement) {
+          lease.settlement = { at: at, result: Object.assign({}, result) };
+        }
+        note('defer', prev, { runId: runId, reason: 'settlement-persist-failed', binding: 'persist' });
+        return false;
+      }
+      leases.delete(loopId);
+      if (untrackRun && !(lease && (lease.untracked || isFn(lease.releaseRun)))) { try { untrackRun(runId); } catch (_) {} }   // legacy host; returned registrations end with their physical pipeline below
+      const loop = store.getLoop(next, loopId);
+      const it = loop && (loop.iterations || []).slice().reverse().find(x => String(x.runId) === String(runId));
+      note(result.status === 'ok' ? 'act' : 'decline', loop, {
+        runId: runId,
+        reason: it ? it.outcome : (result.status === 'ok' ? 'ok' : 'error'),
+        binding: loop ? loop.state : null,
+        detail: { iteration: it ? it.n : 0, usd: (it && it.usd) || 0, converged: !!(it && it.outcome === 'noop') }
+      });
+      /* NEEDS-YOU EDGE. A loop that fills its review queue, converges, meets its objective or parks itself has
+         stopped being able to continue on its own. Fire ONCE on that transition — a level-triggered check would
+         re-announce on every poll, and announcing each candidate would be noise while the loop is still working.
+         The host decides what to do with it (a channel ping is opt-in and default OFF).
+      */
+      try {
+        const NEEDS_YOU = { waiting: 1, done: 1, dormant: 1, paused: 1 };
+        const after = store.getLoop(next, loopId);
+        if (onStopped && after && NEEDS_YOU[after.state] && after.state !== prevState) onStopped(after, prevState || null);
+      } catch (_) { /* a notification must never break a settlement */ }
+      return next;
+    }
+
+    /* reconcileBoot — a fresh driver cannot own a RUNNING row loaded from disk: it has no matching in-memory
+       lease or AbortController. That row is proof of an interrupted prior process, not proof that work is still
+       alive. Reconcile once, before the first gate pass, and persist the recovery pause before allowing any new
+       launch. The existing RESUME action is the only authority that re-arms it. */
+    function reconcileBoot(nowMs) {
+      if (bootReconciled) return;
+      bootReconciled = true;
+      for (const loop of getLoops()) {
+        if (!loop || leases.has(loop.id)) continue;
+        const hasRunning = (loop.iterations || []).some(it => it && it.outcome === 'running');
+        if (!hasRunning) continue;
+        const reason = 'interrupted by sidecar restart — review recovery evidence, then resume explicitly';
+        const next = store.recoverInterruptedIteration(getLoops(), loop.id, reason, { now: nowMs });
+        if (setLoops(next)) {
+          const recovered = store.getLoop(next, loop.id) || loop;
+          note('decline', recovered, {
+            runId: loop.lastRunId || '', reason: 'restart-interrupted', binding: 'recovery',
+            detail: { iteration: loop.iterationCount || 0 }
+          });
+        } else {
+          // A failed recovery write must not fall through to the stale-claim re-fire path in this process.
+          // Keep a synthetic lease as a fail-closed block; a later explicit restart/recovery can try again.
+          leases.set(loop.id, { runId: String(loop.lastRunId || ''), abort: null, startedAt: nowMs, recoveryBlocked: true });
+          note('defer', loop, { reason: 'recovery-persist-failed', binding: 'persist' });
+        }
+      }
+    }
+
+    /* fireLoop — launch ONE iteration. Returns true if a run was actually launched.
+
+       Order is load-bearing: claim → PERSIST → start-iteration → PERSIST → launch. A failed persist at either
+       step aborts before any spend (see the header's advance-before-run note). */
+    function fireLoop(loop, nowMs) {
+      const ident = deps.identityForAgent ? (deps.identityForAgent(loop.agentId, loop) || {}) : {};
+      const provider = deps.providerForLoop ? deps.providerForLoop(loop, ident) : (loop.provider || null);
+      const key = deps.getKey ? deps.getKey(provider, loop) : null;
+      const hasCred = deps.hasCredential ? deps.hasCredential(provider, key, loop) : true;
+      if (!hasCred) {
+        noteStandDown('skip', loop, nowMs, { reason: 'no-credential', binding: 'precheck' });
+        return false;
+      }
+
+      /* THE ROOM IS NAMED BEFORE THE SLOT IS TAKEN. stationFor throws a typed hold when the saved floor cannot be proved right now. The host's precheck
+         usually stood this tick down already; this covers a floor that went held after it. Asked after the claim, the hold settled the pass as a FAILED
+         one (iteration failed before launch), and three of those PAUSED the objective: a hold is no failure, so the tick stands down here with no claim,
+         no iteration and nothing on the record, in the hold's own words. Any other throw is not ours to hide: it keeps its old place in launch, where it
+         fails the pass loudly. */
+      let station, stationFault = null;
+      if (deps.stationFor) {
+        try { station = deps.stationFor(loop.agentId); }
+        catch (e) {
+          const held = holdOf(e);
+          if (held) { noteStandDown('skip', loop, nowMs, { reason: 'precheck', binding: 'precheck', detail: { note: held.why } }); return false; }
+          stationFault = e;
+        }
+      }
+
+      const runId = String(newId());
+
+      // 1. durable claim, persisted BEFORE anything is launched.
+      if (!setLoops(store.claimFire(getLoops(), loop.id, { now: nowMs }))) {
+        note('defer', loop, { reason: 'claim-persist-failed', binding: 'persist' });
+        breakStandDownRun(loop.id);
+        return false;
+      }
+      // 2. take the iteration slot (iterationCount advances at START so a crash still burns it).
+      if (!setLoops(store.startIteration(getLoops(), loop.id, { runId: runId, now: nowMs }))) {
+        note('defer', loop, { reason: 'start-persist-failed', binding: 'persist' });
+        breakStandDownRun(loop.id);
+        return false;
+      }
+
+      const fresh = store.getLoop(getLoops(), loop.id) || loop;
+      const iterN = fresh.iterationCount;
+      const ac = newAbort();
+      const ownedLease = { runId: runId, abort: ac, startedAt: nowMs, beatAt: nowMs };
+      leases.set(loop.id, ownedLease);
+      if (trackRun) {
+        try { const release = trackRun(runId, fresh.agentId, ac); if (isFn(release)) ownedLease.releaseRun = release; }
+        catch (e) { note('decline', fresh, { runId, reason: 'track-run-failed', binding: 'internal', detail: { err: String((e && e.message) || e) } }); }
+      }
+      // take the pre-iteration snapshot NOW (before any work), so the check can tell what THIS iteration
+      // changed rather than inheriting every uncommitted edit from earlier iterations. A snapshot failure is
+      // not fatal — it degrades the verdict to "cannot prove", which loopcheck already treats as unsafe.
+      const beforeP = snapshot ? Promise.resolve().then(() => snapshot(fresh)).catch(() => null) : Promise.resolve(null);
+      let pipelineStarted = false;
+      function releaseTracked() {
+        if (!isFn(ownedLease.releaseRun) || ownedLease.trackingReleased) return;
+        ownedLease.trackingReleased = true;
+        // Snapshot work can outlive a failed context/model path. Keep that work counted, without changing
+        // settlement or blocking its caller. Capture this generation's lease, never the current map entry.
+        beforeP.then(() => {
+          try { ownedLease.releaseRun(); }
+          catch (e) { note('decline', fresh, { runId, reason: 'release-run-failed', binding: 'internal', detail: { err: String((e && e.message) || e) } }); }
+        });
+      }
+
+      /* the per-run EMIT SINK, mirroring cron-driver's. It does three load-bearing jobs:
+
+         1. LIVENESS. Every progress event proves the iteration is genuinely alive, so it renews the durable
+            heartbeat (throttled — the token path must not persist on every delta). Without this a real
+            long-running iteration outlives maxRunMs, gets declared a ZOMBIE, and is re-fired while still
+            running. Nothing else calls store.renewHeartbeat, so the whole heartbeat mechanism hangs off here.
+         2. OUTCOME CAPTURE. runOnce RESOLVES on a failed run and reports the failure through events, so a
+            driver that trusted only the promise would settle a broken iteration as a review candidate and ask
+            the Commander to approve work that never happened.
+         3. VISIBILITY. Forwards to the injected tee so an unattended iteration is observable live, in exactly
+            the redacted shape the host already applies to other autonomous runs. */
+      // The assembler keeps the streamed reply. runOnce does NOT return the assistant text (it resolves with
+      // {reason, messages, usd, turns, …}), so the token stream is where the iteration's own account of its
+      // work comes from — the same way cron-driver captures it. This is what the convergence reader and the
+      // candidate title are read from, so without it every candidate is titleless and NOTHING-TO-DO is never seen.
+      const state = { errMsg: null, reason: null, cancelled: false };
+      const assembler = replyAssembler.makeReplyAssembler();
+      const sink = function (name, payload) {
+        const p = payload || {};
+        const lease = leases.get(loop.id);
+        if (lease) {
+          lease.beatAt = now();
+          if (lease.beatAt - (lease.persistedBeatAt || 0) > heartbeatMs) {
+            lease.persistedBeatAt = lease.beatAt;
+            try { setLoops(store.renewHeartbeat(getLoops(), loop.id, { now: lease.beatAt })); } catch (_) {}
+          }
+        }
+        if (assembler.feed(name, p) === 'token') return;   // accumulated there; never teed out
+        // the iteration's OWN run settles it (typed-outcomes, the /v1 rule): a worker it delegated to forwards its error/end here
+        const lead = !p.runId || String(p.runId) === String(runId);
+        if (name === 'agent.run.error') { if (lead) state.errMsg = p.message || 'run error'; }
+        else if (name === 'capdenied') state.errMsg = state.errMsg || ('no ' + (p.need || 'capability') + ' — ' + (p.reason || ''));
+        else if (name === 'agent.run.end' && lead) {
+          state.reason = p.reason;
+          state.end = p;   // the end as the station stamped it (outcome, finishReason)
+          if (p.reason === 'cancelled') state.cancelled = true;
+        }
+        if (tee) { try { tee(name, p, { loopId: loop.id, runId: runId, iteration: iterN }); } catch (_) {} }
+      };
+
+      // a launch ENDS the stand-down run (night shift: a beat breaks the decline run). The fire row carries the folded
+      // tally only when something was folded, so an ordinary fire row stays exactly { iteration }.
+      const standDown = lastStandDown.get(loop.id);
+      lastStandDown.delete(loop.id);
+      const fireDetail = { iteration: iterN };
+      if (standDown && standDown.held > 0) { fireDetail.heldTicks = standDown.held; fireDetail.heldBinding = standDown.binding; }
+      note('fire', fresh, { runId: runId, reason: 'iteration-' + iterN, binding: 'verdict', detail: fireDetail });
+
+      /* RESOLVE THE PROJECT CONTEXT BEFORE SPENDING. The slot and the durable claim are already taken (so a
+         crash here still burns the iteration rather than replaying it), but the model call has not happened.
+         An unreachable project ends the pass right here: a blind pass can only produce a blind answer, and a
+         blind "0 findings" would be counted as convergence. */
+      // No context dep (or a loop with no folder) launches SYNCHRONOUSLY, exactly as before — the async hop
+      // exists only where there is something real to resolve first, so the common path keeps its old timing.
+      if (!context) {
+        try { return launch(''); }
+        finally { if (!pipelineStarted) releaseTracked(); }
+      }
+
+      const ctxP = Promise.resolve().then(() => context(fresh))
+        .catch(e => ({ reachable: false, why: 'project scan failed: ' + ((e && e.message) || e) }));
+
+      ctxP.then((ctx) => {
+        ctx = ctx || { text: '', reachable: true };
+        if (ctx.reachable === false) {
+          return settle(loop.id, runId, {
+            status: 'error',
+            error: 'could not read the project folder — ' + (ctx.why || 'nothing was readable there') +
+              '. The pass was stopped before spending anything.'
+          });
+        }
+        return launch(ctx.text || '');
+      }).catch((e) => {
+        // SETTLE, never just drop the in-memory lease: by now claimFire + startIteration are PERSISTED and
+        // trackRun has lit the agent. Deleting only the lease left the durable fireClaim reading in-flight
+        // for the full staleMs on every tick, the iteration row 'running' forever, and the orphaned
+        // runsMeta entry keeping the agent posed at its desk — then reconcileBoot paused the loop for an
+        // "interrupted" iteration that never launched. settle() clears all three (and untracks the run).
+        note('decline', fresh, { runId: runId, reason: 'context-threw', binding: 'internal', detail: { err: String((e && e.message) || e).slice(0, 200) } });
+        try { settle(loop.id, runId, { status: 'error', error: 'iteration failed before launch: ' + ((e && e.message) || e) }); }
+        catch (_) { try { leases.delete(loop.id); } catch (__) {} }
+      }).finally(() => { if (!pipelineStarted) releaseTracked(); });
+      return true;
+
+      function launch(snapshotText) {
+      const currentLease = leases.get(loop.id);
+      if (!currentLease || currentLease.runId !== runId || (ac.signal && ac.signal.aborted)) return false;
+      if (stationFault) throw stationFault;   // a room read that failed for any reason but a hold (see above): the pass fails before launch, as it always did
+      /* THE TOOLS WORK WHERE THE AGENT IS TOLD IT WORKS (run-paths lane). The project line tells the agent this loop
+         works in its folder, but the run was never given that folder, so fs.* and shell.* resolved relative paths in
+         the private workspace. The folder rides as the run's WORKDIR exactly when the host's projectLine names it (the
+         host re-proves the approval at launch); a host without that check hands no folder at all (fail closed, review
+         minor). As a workdir, runOnceCore re-proves it once more by REAL path (cronCanonicalWorkdir: a folder swapped
+         for a link since its approval is refused), makes it the run's root, and writes the project anchor line itself
+         (with the project's own instructions), exactly as for a routine, so the persona carries no second copy. */
+      const folderLine = projectLine ? String(projectLine(fresh) || '') : '';
+      const folder = fresh.workdir && projectLine && folderLine ? String(fresh.workdir) : '';
+      const opts = {
+        key: key,
+        model: fresh.model || ident.model || deps.defaultModel,
+        provider: provider,
+        // the persona; a loop in a real folder gets its project anchor from runOnceCore (the workdir below)
+        system: (ident.system || personaOf()) + (folder ? '' : folderLine),
+        workdir: folder || undefined,
+        stationEvidence: true,   // the station's observed evidence rides the run context, so this persona is the same every iteration
+        messages: buildMessages(fresh, snapshotText),
+        agentId: fresh.agentId,
+        isTask: true,
+        signal: ac.signal,
+        runId: runId,
+        streamId: 'loop-' + fresh.id,          // one durable stream per LOOP, so its iterations share a thread
+        surface: 'autonomous',
+        trigger: 'loop',
+        station: station,   // read above, before the claim
+        // a per-iteration USD ceiling, when the Commander set one. 0 = ungoverned (budgetcaps.js semantics).
+        maxCostUsd: (fresh.budget && fresh.budget.perIterationUsd) || undefined,
+        emit: sink
+      };
+
+      let p;
+      try { p = runOnce(opts); } catch (e) {
+        try { settle(loop.id, runId, { status: 'error', error: (e && e.message) || 'run host threw' }); }
+        finally { releaseTracked(); }
+        return false;
+      }
+
+      // NOTE the harvest is invoked INSIDE a then-callback (not eagerly), so a harvest that throws
+      // SYNCHRONOUSLY rejects this link rather than escaping the chain — an escaped throw here would be an
+      // unhandled rejection that takes down a 24/7 process. The trailing .catch is the last-resort net: a
+      // driver whose bookkeeping throws must degrade to a stranded lease, never to a dead sidecar.
+      pipelineStarted = true;
+      Promise.resolve(p)
+        .then(
+          (res) => {
+            // E-STOP settles cancellation at the host boundary immediately. A provider/tool that ignores the
+            // AbortSignal may still resolve later; generation-fence that stale completion before check/harvest.
+            const live = leases.get(loop.id);
+            if (!live || live.runId !== runId || (ac.signal && ac.signal.aborted)) return null;
+            // runOnce RESOLVES on a failed run — the failure arrives through the sink (state.errMsg) or as an
+            // end reason. Trusting the promise alone would park a broken iteration as a review candidate and
+            // ask the Commander to approve work that never happened.
+            if (state.cancelled) return settle(loop.id, runId, { status: 'error', cancelled: true, error: 'cancelled' });
+            if (state.errMsg) return settle(loop.id, runId, { status: 'error', error: state.errMsg });
+            const terminalReason = String(state.reason || (res && res.reason) || '');
+            // only a SUCCEEDED iteration reaches the check (RunOutcome): a provider-cut 'done' is unfinished work, not a candidate
+            const endSaid = state.end || (terminalReason ? { reason: terminalReason } : null);
+            const ended = RunOutcome ? RunOutcome.ofEnd(endSaid, null) : { outcome: terminalReason === 'done' ? 'succeeded' : 'failed' };
+            if (ended.outcome !== 'succeeded') {
+              // review r8: a pass whose run did not finish (asked, cut short, a limit, an empty reply, a refusal, a hold) settles as that
+              // outcome (unfinished), never a failed pass toward the failure pause; a stop stays cancelled, a failure failed
+              const unfinished = terminalReason !== 'cancelled' && ended.outcome !== 'failed' && ended.outcome !== 'stopped' ? ended.outcome : '';
+              return settle(loop.id, runId, {
+                status: 'error', cancelled: terminalReason === 'cancelled', unfinished,
+                error: incompleteRunMessage(terminalReason, { toolsRan: assembler.toolsRan, finishReason: endSaid && endSaid.finishReason })   // tools that ran: an 'empty' end may already have changed things
+              });
+            }
+            // hand the harvest the run result WITH the streamed text folded in (runOnce doesn't carry it).
+            const withText = Object.assign({}, res || {}, { text: (res && res.text) || assembler.text() });
+            // RUN THE CHECK between the work and the settlement. A check that THROWS is not a pass and not a
+            // silent skip — it becomes an explicit un-trusted verdict, because "we could not verify" must never
+            // read as "verified fine".
+            const checkP = check
+              ? beforeP.then(before => check(fresh, { iterN: iterN, before: before }))
+                .catch(e => ({ ran: true, passed: false, trusted: false, mustReview: true, tampered: false, tamperedPaths: [], gitProven: false, summary: '', note: 'the check could not be run — ' + ((e && e.message) || e) }))
+              : Promise.resolve(null);
+            // the harvest needs the SAME pre-iteration snapshot the check got: its commit pathspec is
+            // after-minus-before, so without it a pass would stage files that were already dirty when the
+            // loop started — the Commander's own work, swept into a commit a later rejection reverts.
+            return checkP.then(verdict => beforeP.then(before =>
+              Promise.resolve().then(() => {
+                const live = leases.get(loop.id);
+                if (!live || live.runId !== runId || (ac.signal && ac.signal.aborted)) return null;
+                return harvest(fresh, withText, iterN, { before: before, check: verdict });
+              }).then(
+              (h) => settle(loop.id, runId, Object.assign(
+                { status: 'ok', check: verdict },
+                h || {},
+                // the review card needs to show WHAT CHANGED. A harvest that proved its own file list wins;
+                // otherwise fall back to what the check observed this pass.
+                (h && h.files && h.files.length) ? {} : { files: (verdict && verdict.changedFiles) || [] },
+                // the per-pass diff, captured by the host at settle time — what the review card actually shows
+                { diff: (verdict && verdict.diff) || null }
+              )),
+              // a harvest failure (e.g. git refused the commit) is a REAL iteration failure, not a silent
+              // success: the work did not land, so the loop must not park a candidate the Commander cannot act on.
+              (e) => settle(loop.id, runId, { status: 'error', error: 'harvest: ' + ((e && e.message) || 'failed') })
+            )));
+          },
+          (e) => {
+            const live = leases.get(loop.id);
+            if (!live || live.runId !== runId) return null;
+            return settle(loop.id, runId, {
+              status: 'error',
+              cancelled: !!(e && (e.name === 'AbortError' || /abort/i.test(String(e.message || '')))),
+              error: (e && e.message) || 'run failed'
+            });
+          }
+        )
+        .catch((e) => {
+          const live = leases.get(loop.id);
+          if (!live || live.runId !== runId) return;
+          try { leases.delete(loop.id); } catch (_) {}
+          note('decline', fresh, { runId: runId, reason: 'settle-threw', binding: 'internal', detail: { err: String((e && e.message) || e).slice(0, 200) } });
+        }).finally(releaseTracked);
+      return true;
+      }
+    }
+
+    /* applyTick — one pass over every loop. */
+    function applyTick(nowMs) {
+      reconcileBoot(nowMs);
+      const halted = isHalted();
+      let fired = 0, skipped = 0, deferred = 0, planned = 0;
+
+      // Retry completed-but-not-yet-durable iteration receipts before considering any new fire. A pending
+      // settlement is not a live process and must never be reclaimed/re-executed as a stale run.
+      const settledThisTick = new Set();
+      for (const entry of Array.from(leases.entries())) {
+        const loopId = entry[0], lease = entry[1];
+        if (!lease || !lease.settlement) continue;
+        settle(loopId, lease.runId, lease.settlement.result);
+        if (!leases.has(loopId)) settledThisTick.add(loopId);
+      }
+
+      // roll every loop's daily budget bucket first, persisting once if any changed. Done before the gate so a
+      // loop that was budget-bound yesterday is genuinely free today rather than free-on-the-tick-after.
+      const rolledAll = getLoops().map(l => LJ.rollBudgetDay(l, { now: nowMs }));
+      if (rolledAll.some((l, i) => l !== getLoops()[i])) setLoops(rolledAll);
+
+      for (const loop of getLoops()) {
+        if (!loop) continue;
+        if (settledThisTick.has(loop.id)) { skipped++; continue; }
+
+        // a loop whose agent was deleted must STOP — never fire under a ghost, never silently keep spending.
+        if (agentExists && loop.enabled !== false && !agentExists(loop.agentId)) {
+          setLoops(store.stopLoop(getLoops(), loop.id, 'the agent "' + loop.agentId + '" no longer exists', { now: nowMs }));
+          note('skip', loop, { reason: 'agent-missing', binding: 'precheck' });
+          skipped++;
+          continue;
+        }
+
+        const inFlight = leases.has(loop.id);
+        const d = LJ.decide(loop, {
+          halted: halted,
+          agentBusy: !concurrencyFree(loop.agentId),
+          inFlight: inFlight,
+          precheck: deps.precheck ? deps.precheck({ loop: loop }) : undefined
+        }, { now: nowMs, staleMs: maxRunMs });
+
+        if (!d.fire) {
+          // only the states that are genuinely a per-tick DECISION are worth a ledger row; a paused/stopped/
+          // dormant loop would otherwise write a row every 20s tick forever and drown the real decisions. Even
+          // these three are edge-triggered (noteStandDown): a loop held for hours writes one row an hour, not 180.
+          if (d.binding === 'concurrency' || d.binding === 'precheck' || d.binding === 'budget') {
+            noteStandDown('skip', loop, nowMs, { reason: d.binding, binding: d.binding, detail: { note: d.detail || '' } });
+          }
+          skipped++;
+          continue;
+        }
+
+        planned++;
+        if (maxParallel > 0 && leases.size >= maxParallel) {
+          // over the fan-out cap: HELD, not dropped. Nothing is advanced, so it is still eligible next tick.
+          noteStandDown('defer', loop, nowMs, { reason: 'at-capacity', binding: 'concurrency-cap' });
+          deferred++;
+          continue;
+        }
+        if (fireLoop(loop, nowMs)) fired++; else skipped++;
+      }
+
+      // keep the edge-trigger memory bounded: forget the run of any loop that no longer exists.
+      if (lastStandDown.size) {
+        const live = new Set(getLoops().map(l => l && l.id));
+        for (const id of Array.from(lastStandDown.keys())) if (!live.has(id)) lastStandDown.delete(id);
+      }
+
+      return { fired: fired, skipped: skipped, deferred: deferred, planned: planned };
+    }
+
+    /* abortAllLeases — the E-STOP hook. Aborts every in-flight iteration; each one's rejection path settles it
+       as 'cancelled', which costs neither the fail streak nor the dry streak. Returns how many were aborted.
+       Must never throw: an E-STOP that fails halfway is worse than no E-STOP. */
+    function abortLease(loopId, reason) {
+      const lease = leases.get(loopId);
+      if (!lease || lease.recoveryBlocked || lease.settlement) return false;
+      try { if (lease.abort && isFn(lease.abort.abort)) lease.abort.abort(); } catch (_) {}
+      try {
+        settle(loopId, lease.runId, {
+          status: 'error', cancelled: true, error: String(reason || 'cancelled by the Commander')
+        });
+      } catch (_) {}
+      return true;
+    }
+
+    function abortAllLeases() {
+      let n = 0;
+      // abortLease/settle mutates the lease map, so iterate a stable snapshot. The host owns cancellation: once
+      // E-STOP is accepted the loop is durably terminal even if a provider or tool ignores AbortSignal.
+      for (const [loopId] of Array.from(leases.entries())) if (abortLease(loopId, 'cancelled by E-STOP')) n++;
+      return n;
+    }
+
+    return {
+      applyTick: applyTick,
+      abortLease: abortLease,
+      abortAllLeases: abortAllLeases,
+      leases: leases,
+      _internals: {
+        fireLoop: fireLoop, settle: settle, reconcileBoot: reconcileBoot, buildMessages: buildMessages, defaultHarvest: defaultHarvest,
+        standDownRuns: () => lastStandDown.size
+      }
+    };
+  }
+
+  return { makeLoopDriver: makeLoopDriver, DEFAULT_MAX_PARALLEL: DEFAULT_MAX_PARALLEL, DEFAULT_MAX_RUN_MS: DEFAULT_MAX_RUN_MS };
+});

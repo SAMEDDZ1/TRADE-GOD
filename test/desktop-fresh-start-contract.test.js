@@ -1,0 +1,40 @@
+/* node test/desktop-fresh-start-contract.test.js — packaged Mac/Windows unreachable escape wiring. */
+'use strict';
+const A = require('./_assert.js');
+const fs = require('fs');
+const path = require('path');
+const root = path.join(__dirname, '..');
+const main = fs.readFileSync(path.join(root, 'src-tauri', 'src', 'main.rs'), 'utf8');
+const native = fs.readFileSync(path.join(root, 'src-tauri', 'src', 'fresh_start.rs'), 'utf8');
+const html = fs.readFileSync(path.join(root, 'frontend', 'index.html'), 'utf8');
+const app = fs.readFileSync(path.join(root, 'frontend', 'app', 'app.js'), 'utf8');
+
+A.ok(main.includes('fn starnet_start_fresh('), 'desktop shell exposes a sidecar-independent fresh-start command');
+A.ok(/generate_handler!\[[\s\S]*starnet_start_fresh/.test(main), 'the native command is registered for packaged UI IPC');
+A.ok(main.includes('migrate_credits_token_from_plaintext(&st.workspaces)'), 'a preserved linked-credit token is re-adopted before respawn');
+A.ok(main.includes('compare_exchange(false, true'), 'restart and fresh-start commands cannot race each other');
+A.ok(main.includes('window.clear_all_browsing_data()'), 'packaged WebView2/WKWebView state is cleared natively');
+A.ok(native.includes('fs::rename(workspaces, destination)'), 'the prior station is moved, never deleted');
+A.ok(native.includes('const CREDITS_LINK: &str = ".secrets/credits.json"'), 'the TRADE GOD credit-account identity survives the station reset');
+// the last-resort exit never refuses over an unreadable money record (test/native-process-ownership/tests/station_contract.rs
+// holds every carry row): the link stays in the set-aside generation, and the door says so
+A.eq(/reset refused/.test(native), false, 'an unreadable account link never refuses the reset');
+A.ok(main.includes('credits_left_aside: prepared.credits_left_aside'), 'the shell reports a link left behind (additive FreshStartView.creditsLeftAside)');
+// the owner claim is judged by process identity (process_identity.rs, the sidecar's own rule): a dead PID — or one Windows
+// has since recycled for another program — cannot strand the fresh-start escape
+A.ok(native.includes('owner_holds(&claim)') && /fn claim_still_held[\s\S]{0,200}process_identity::claim_is_held\(claim\)/.test(native),
+  'a dead or recycled PID stamp cannot strand the fresh-start escape');
+A.ok(native.includes('MIGRATION_MARKER') && native.includes('acknowledged_roots'), 'the clean generation cannot resurrect legacy state on Mac or Windows relaunch');
+A.ok(html.includes('id="btn-unreachable-fresh"'), 'the unreachable screen exposes the escape');
+A.ok(html.includes('id="unreachable-code"') && html.includes('id="btn-unreachable-report"'), 'the unreachable screen exposes screenshot-readable and copyable diagnosis');
+A.ok(html.includes('does not remove your TRADE GOD account link or purchased credits'), 'the screen explains the credit-preserving scope');
+A.ok(app.includes('FreshStart.resetDesktop(core)'), 'the two-click UI calls the native transaction rather than dead sidecar HTTP');
+A.ok(app.includes("freshBtn.textContent = '✦ CONFIRM — START COMPLETELY FRESH'"), 'the destructive choice requires an explicit second click');
+A.ok(app.includes('browserResetBlocked = true'), 'an uncleared browser cache cannot silently repopulate the clean station');
+A.ok(app.includes('FreshStart.retryBrowserClear(preservedReset)'), 'a browser-clear retry reuses the original quarantine receipt instead of moving the clean station again');
+A.ok(app.includes('SAVE-403 · STALE WINDOW SESSION') && app.includes('SAVE-NET · SAVE REQUEST LOST'), 'the two save-failure classes have stable support codes');
+A.ok(/Diag\.copy\(\{ notify: false, context: \{ kind: diagnosis\.code[\s\S]{0,500}Diag\.showBlock/.test(app), 'recovery details fall back to selectable on-screen text when clipboard copy fails');
+
+A.ok(!/Diag\.copy\(\{ notify: false, context: \{ kind: diagnosis\.code[^}]*engineAlive/.test(app), 'recovery details measure engine liveness instead of asserting REACHABLE');
+
+A.report('desktop-fresh-start-contract.test');

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 64">
+  <!-- TRADE GOD wordmark (used as a CSS mask: only the shape matters, colour comes from the theme) -->
+  <path d="M4 44 L4 16 L14 26 L26 8 L38 26 L48 16 L48 44 Z"/>
+  <rect x="4" y="48" width="44" height="6"/>
+  <text x="60" y="47" font-family="VT323, 'Courier New', monospace" font-size="46" font-weight="700" letter-spacing="2">TRADE GOD</text>
+</svg>

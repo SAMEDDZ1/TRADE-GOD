@@ -1,0 +1,469 @@
+/* node test/provider.anthropic.test.js - native Anthropic Messages provider seam. */
+'use strict';
+const A = require('./_assert.js');
+const { makeAnthropicProvider, _internals } = require('../sidecar/providers/anthropic.js');
+
+const line = obj => 'data: ' + JSON.stringify(obj);
+const sseFetch = (sseText, status) => async () => new Response(sseText, { status: status || 200, headers: { 'Content-Type': 'text/event-stream' } });
+async function collect(provider, req) { const out = []; for await (const e of provider.stream(req)) out.push(e); return out; }
+
+(async () => {
+  // A. text turn: Anthropic text deltas, split usage, and end_turn normalize to the harness stream.
+  {
+    const sse = [
+      line({ type: 'message_start', message: { usage: { input_tokens: 3, output_tokens: 0 } } }),
+      line({ type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } }),
+      line({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Hel' } }),
+      line({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'lo' } }),
+      line({ type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 2 } }),
+      line({ type: 'message_stop' }),
+      ''
+    ].join('\n');
+    const p = makeAnthropicProvider({ fetch: sseFetch(sse), key: 'k' });
+    const evs = await collect(p, { model: 'claude-test', messages: [{ role: 'user', content: 'hi' }] });
+    A.eq(evs.filter(e => e.type === 'text').map(e => e.delta).join(''), 'Hello', 'text deltas stream');
+    const usage = evs.filter(e => e.type === 'usage').pop().usage;
+    A.eq(usage.prompt_tokens, 3, 'message_start input_tokens are retained in final usage');
+    A.eq(usage.completion_tokens, 2, 'message_delta output_tokens -> completion_tokens');
+    A.eq(evs.find(e => e.type === 'done').finishReason, 'stop', 'end_turn -> stop');
+  }
+
+  // B. tool call: content_block_start/tool_use + input_json_delta fragments become harness tool events.
+  {
+    const sse = [
+      line({ type: 'content_block_start', index: 1, content_block: { type: 'tool_use', id: 'toolu_1', name: 'web_search', input: {} } }),
+      line({ type: 'content_block_delta', index: 1, delta: { type: 'input_json_delta', partial_json: '{"q":' } }),
+      line({ type: 'content_block_delta', index: 1, delta: { type: 'input_json_delta', partial_json: '"x"}' } }),
+      line({ type: 'content_block_stop', index: 1 }),
+      line({ type: 'message_delta', delta: { stop_reason: 'tool_use' }, usage: { output_tokens: 4 } }),
+      line({ type: 'message_stop' }),
+      ''
+    ].join('\n');
+    const p = makeAnthropicProvider({ fetch: sseFetch(sse), key: 'k' });
+    const evs = await collect(p, { model: 'claude-test', messages: [], tools: [{ type: 'function', function: { name: 'web_search' } }] });
+    const start = evs.find(e => e.type === 'tool_start');
+    A.eq(start, { type: 'tool_start', index: 0, id: 'toolu_1', name: 'web_search' }, 'tool_use start is remapped to dense harness index');
+    A.eq(evs.filter(e => e.type === 'tool_args').map(e => e.chunk).join(''), '{"q":"x"}', 'input_json_delta fragments concatenate');
+    A.ok(evs.find(e => e.type === 'tool_done' && e.index === 0), 'tool_done emitted');
+    A.eq(evs.find(e => e.type === 'done').finishReason, 'tool_calls', 'tool_use -> tool_calls');
+  }
+
+  // C. request conversion: leading system lifts to top-level system; tools and tool-results use Anthropic shape.
+  {
+    let captured = null;
+    const fetchImpl = async (url, init) => {
+      captured = { url, headers: init.headers, body: JSON.parse(init.body) };
+      return new Response([line({ type: 'message_stop' }), ''].join('\n'), { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+    };
+    const p = makeAnthropicProvider({ fetch: fetchImpl, key: 'KEY', baseUrl: 'https://anthropic.test/v1/' });
+    await collect(p, {
+      model: 'claude-test',
+      messages: [
+        { role: 'system', content: 'sys' },
+        { role: 'assistant', content: 'ok', tool_calls: [{ id: 'call_7', function: { name: 'web', arguments: '{"q":1}' } }] },
+        { role: 'tool', tool_call_id: 'call_7', content: 'result text' }
+      ],
+      tools: [{ type: 'function', function: { name: 'web', description: 'd', parameters: { type: 'object' } } }]
+    });
+    A.eq(captured.url, 'https://anthropic.test/v1/messages', 'POSTs to /messages');
+    A.eq(captured.headers['x-api-key'], 'KEY', 'api key sent as x-api-key');
+    A.eq(captured.headers['anthropic-version'], '2023-06-01', 'Anthropic API version header set');
+    A.eq(captured.body.system, [{ type: 'text', text: 'sys', cache_control: { type: 'ephemeral' } }],
+      'leading system lifted — block form, carrying the cache breakpoint');
+    // an UNSPLIT system prompt keeps the system anchor over the tools (the TOOL ANCHOR rides only a split, task-run system)
+    A.eq(captured.body.tools[0], { name: 'web', description: 'd', input_schema: { type: 'object' } }, 'OpenAI tool -> Anthropic tool');
+    // the transcript opens on an assistant turn: the request gets a fenced user boundary first (provider.js projectRoles —
+    // the API refuses a first message that is not a user turn)
+    A.eq([captured.body.messages[0].role, /^<host_turn>/.test(captured.body.messages[0].content[0].text)], ['user', true], 'a <host_turn> user boundary opens the request');
+    A.eq(captured.body.messages[1].content[1], { type: 'tool_use', id: 'call_7', name: 'web', input: { q: 1 }, cache_control: { type: 'ephemeral' } },
+      'assistant tool_call -> tool_use block (inside the last-3 sliding window, so it carries an anchor)');
+    A.eq(captured.body.messages[2].content[0], { type: 'tool_result', tool_use_id: 'call_7', content: 'result text', cache_control: { type: 'ephemeral' } },
+      'tool result -> tool_result block (last block of the last turn carries the conversation breakpoint)');
+  }
+
+  /* C2. PROMPT CACHING. Anthropic caches by PREFIX over tools -> system -> messages, so the breakpoint has to
+     land on the last block of the STATIC prefix or the 59.7% of the request that is tool schemas is re-billed
+     every turn. These pin the placement rules, the kill switch, and the aliasing trap. */
+  {
+    const cap = async (req, patch) => {
+      let captured = null;
+      const fetchImpl = async (url, init) => {
+        captured = JSON.parse(init.body);
+        return new Response([line({ type: 'message_stop' }), ''].join('\n'), { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+      };
+      const prev = process.env.SKYNET_ANTHROPIC_CACHE;
+      if (patch !== undefined) process.env.SKYNET_ANTHROPIC_CACHE = patch;
+      // the flag is resolved at module load, so re-require through a cache bust to observe the OFF path.
+      const mod = patch === undefined ? { makeAnthropicProvider }
+        : (delete require.cache[require.resolve('../sidecar/providers/anthropic.js')], require('../sidecar/providers/anthropic.js'));
+      await collect(mod.makeAnthropicProvider({ fetch: fetchImpl, key: 'k' }), req);
+      if (patch !== undefined) {
+        if (prev === undefined) delete process.env.SKYNET_ANTHROPIC_CACHE; else process.env.SKYNET_ANTHROPIC_CACHE = prev;
+        delete require.cache[require.resolve('../sidecar/providers/anthropic.js')];
+      }
+      return captured;
+    };
+    const TOOLS = [{ type: 'function', function: { name: 'a', parameters: { type: 'object' } } }];
+
+    // With an UNSPLIT system prompt, SYSTEM is the anchor — it renders after tools, so one breakpoint caches both, and the
+    // three newest messages keep their sliding anchors (1 + 3 = the API's 4).
+    const tail3 = [{ role: 'system', content: 's' }, { role: 'user', content: 'u1' }, { role: 'assistant', content: 'a1' }, { role: 'user', content: 'u2' }];
+    const withSys = await cap({ model: 'm', messages: tail3, tools: TOOLS });
+    A.eq(withSys.system[0].cache_control, { type: 'ephemeral' }, 'system block carries the static-prefix breakpoint');
+    A.ok(!withSys.tools[withSys.tools.length - 1].cache_control, 'unsplit system: no redundant breakpoint on the tools (the system anchor covers them)');
+    A.eq(withSys.messages.map(m => m.content.some(b => b.cache_control)), [true, true, true], 'unsplit system: the three newest messages keep their sliding anchors');
+    /* TOOL ANCHOR (lean-prompt 2026-10-12): only a SPLIT system (a task run's cacheSystemPrefix + the per-conversation
+       tail) anchors the last tool on its own, so a change in the system tail (a Dossier edit, a persona toggle) never
+       re-writes the catalogue in front of it (issue #105). Budget: tools 1 + the stable system block 1 + 2 tail. */
+    const SPLIT_SYS = 'stable prefix. '.repeat(10);
+    const split = await cap({ model: 'm', cacheSystemPrefix: SPLIT_SYS, messages: [{ role: 'system', content: SPLIT_SYS + '\n\nper-conversation tail' }].concat(tail3.slice(1)), tools: TOOLS });
+    A.eq(split.tools[split.tools.length - 1].cache_control, { type: 'ephemeral' }, 'split system: the last tool anchors the catalogue');
+    A.ok(split.system[0].cache_control && !split.system[1].cache_control, 'split system: the stable block is anchored, the tail block is not');
+    A.eq(split.messages.map(m => m.content.some(b => b.cache_control)), [false, true, true], 'split system: two sliding tail anchors');
+    {
+      // the kill switch is read PER CALL: the provider made above (module already loaded) obeys it without a re-require
+      const prev = process.env.STARNET_ANTHROPIC_TOOL_ANCHOR;
+      process.env.STARNET_ANTHROPIC_TOOL_ANCHOR = '0';
+      let legacy = null;
+      try {
+        await collect(makeAnthropicProvider({ key: 'k', fetch: async (_, o) => { legacy = JSON.parse(o.body); return new Response('data: {"type":"message_stop"}\n\n'); } }),
+          { model: 'm', cacheSystemPrefix: SPLIT_SYS, messages: [{ role: 'system', content: SPLIT_SYS + '\n\nper-conversation tail' }].concat(tail3.slice(1)), tools: TOOLS });
+      } finally { if (prev === undefined) delete process.env.STARNET_ANTHROPIC_TOOL_ANCHOR; else process.env.STARNET_ANTHROPIC_TOOL_ANCHOR = prev; }
+      A.ok(legacy && !legacy.tools[0].cache_control && legacy.system[0].cache_control && legacy.system[1].cache_control,
+        'kill switch STARNET_ANTHROPIC_TOOL_ANCHOR=0 (read per call): the system-only anchor layout');
+    }
+
+    // With NO system prompt the last tool is the only anchor that still covers the tool catalogue.
+    const noSys = await cap({ model: 'm', messages: [{ role: 'user', content: 'u' }], tools: TOOLS });
+    A.ok(!noSys.system, 'no system block invented when the caller sent none');
+    A.eq(noSys.tools[0].cache_control, { type: 'ephemeral' }, 'tools anchor the breakpoint when there is no system prompt');
+
+    /* SLIDING TAIL ANCHORS (2026-07-31): the LAST THREE messages each carry a breakpoint (with the
+       static-prefix anchor that is the API's 4-breakpoint max). One trailing anchor was fragile: a
+       breakpoint only walks back 20 blocks for its predecessor, and one parallel-tool turn can append
+       more than that — the anchor then misses and the whole conversation re-bills cold. Turns older
+       than the window stay unstamped: they are read points the slid-off anchors already cover. */
+    const convo = await cap({ model: 'm', messages: [
+      { role: 'user', content: 'one' }, { role: 'assistant', content: 'two' },
+      { role: 'user', content: 'three' }, { role: 'assistant', content: 'four' },
+      { role: 'user', content: 'five' }
+    ] });
+    A.ok(!convo.messages[0].content[0].cache_control, 'turns older than the sliding window are read points, not write points');
+    A.ok(!convo.messages[1].content[0].cache_control, 'the window is exactly three — the fourth-from-last turn is unstamped');
+    A.eq(convo.messages[2].content[0].cache_control, { type: 'ephemeral' }, 'third-from-last turn carries an anchor');
+    A.eq(convo.messages[3].content[0].cache_control, { type: 'ephemeral' }, 'second-from-last turn carries an anchor');
+    A.eq(convo.messages[4].content[0].cache_control, { type: 'ephemeral' }, 'last turn carries an anchor');
+
+    // ALIASING TRAP: native image blocks pass through by reference, so stamping in place would mutate the
+    // caller's own message array and leak cache_control back into harness state.
+    const img = { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'x' } };
+    const msgs = [{ role: 'user', content: [img] }];
+    await cap({ model: 'm', messages: msgs });
+    A.eq(img, { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'x' } }, 'caller image block is NOT mutated by the breakpoint');
+
+    // Kill switch: billing-affecting behaviour must be disableable without a code change.
+    const off = await cap({ model: 'm', messages: [{ role: 'system', content: 's' }, { role: 'user', content: 'u' }], tools: TOOLS }, '0');
+    A.ok(!off.system[0].cache_control, 'SKYNET_ANTHROPIC_CACHE=0 drops the system breakpoint');
+    A.ok(!off.tools[0].cache_control, 'SKYNET_ANTHROPIC_CACHE=0 drops every breakpoint');
+    A.eq(off.system[0].text, 's', 'system content survives with caching off');
+
+    // 1-HOUR TTL (2026-07-31): SKYNET_ANTHROPIC_CACHE_TTL=1h rides every breakpoint. Opt-in because a 1h
+    // write bills 2.0x (vs 1.25x) — the right trade only for human-paced conversations with >5min gaps.
+    {
+      const prevTtl = process.env.SKYNET_ANTHROPIC_CACHE_TTL;
+      process.env.SKYNET_ANTHROPIC_CACHE_TTL = '1h';
+      delete require.cache[require.resolve('../sidecar/providers/anthropic.js')];
+      const mod = require('../sidecar/providers/anthropic.js');
+      let got = null;
+      const fetchImpl = async (url, init) => {
+        got = JSON.parse(init.body);
+        return new Response([line({ type: 'message_stop' }), ''].join('\n'), { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+      };
+      await collect(mod.makeAnthropicProvider({ fetch: fetchImpl, key: 'k' }),
+        { model: 'm', messages: [{ role: 'system', content: 's' }, { role: 'user', content: 'u' }] });
+      A.eq(got.system[0].cache_control, { type: 'ephemeral', ttl: '1h' }, 'the 1h TTL rides the static-prefix anchor');
+      A.eq(got.messages[0].content[0].cache_control, { type: 'ephemeral', ttl: '1h' }, 'and the tail anchors');
+      if (prevTtl === undefined) delete process.env.SKYNET_ANTHROPIC_CACHE_TTL; else process.env.SKYNET_ANTHROPIC_CACHE_TTL = prevTtl;
+      delete require.cache[require.resolve('../sidecar/providers/anthropic.js')];
+    }
+  }
+
+  // D. model catalog parses /models.
+  {
+    const fetchImpl = async (url, init) => {
+      A.eq(url, 'https://api.anthropic.com/v1/models', 'lists /models');
+      A.eq(init.headers['x-api-key'], 'KEY', 'model listing is authenticated');
+      return new Response(JSON.stringify({ data: [{ id: 'claude-x', display_name: 'Claude X' }] }), { status: 200 });
+    };
+    const p = makeAnthropicProvider({ fetch: fetchImpl, key: 'KEY' });
+    const models = await p.listModels();
+    A.eq(models[0].id, 'claude-x', 'catalog id parsed');
+    A.eq(models[0].supportsTools, true, 'Anthropic native models are marked tool-capable');
+  }
+  // D2 (#90). A /models answer the API REFUSED is still an empty catalog to every caller, but the adapter keeps its
+  // status so the key check can say "rejected this key (HTTP 401)" instead of blaming an empty catalog.
+  {
+    let status = 401;
+    const p = makeAnthropicProvider({ fetch: async () => (status === 200
+      ? new Response(JSON.stringify({ data: [{ id: 'claude-x' }] }), { status: 200 })
+      : new Response(JSON.stringify({ type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } }), { status })), key: 'KEY' });
+    A.eq(await p.listModels(), [], 'a refused /models listing is still an empty catalog (no caller changes shape)');
+    A.eq(p.catalogHttpStatus(), 401, 'the refusal status is kept for the key check');
+    status = 403;
+    await p.listModels();
+    A.eq(p.catalogHttpStatus(), 403, 'the LATEST refusal is what it reports');
+    status = 200;
+    A.eq((await p.listModels()).length, 1, 'a later good answer still loads the catalog');
+    A.eq(p.catalogHttpStatus(), 0, 'and clears the refusal (0 = the last answer was not an HTTP refusal)');
+    let online = true;
+    const offline = makeAnthropicProvider({ fetch: async () => { if (online) return new Response('{}', { status: 401 }); throw new Error('fetch failed'); }, key: 'KEY' });
+    await offline.listModels();
+    A.eq(offline.catalogHttpStatus(), 401, 'refused first');
+    online = false;
+    await offline.listModels();
+    A.eq(offline.catalogHttpStatus(), 0, 'a later network failure is NOT an HTTP refusal: the old status is not reported as current');
+    // the request never reached Anthropic (DNS / refused connection / proxy): keep THAT error, so the key check can name
+    // the network cause (#62 wording) instead of blaming the key
+    const netErr = Object.assign(new Error('fetch failed'), { cause: { code: 'ECONNREFUSED' } });
+    let reach = false;
+    const unreached = makeAnthropicProvider({ fetch: async () => { if (!reach) throw netErr; return new Response(JSON.stringify({ data: [{ id: 'claude-x' }] }), { status: 200 }); }, key: 'KEY' });
+    A.eq(await unreached.listModels(), [], 'an unreachable /models is still an empty catalog');
+    A.ok(unreached.catalogFetchError() === netErr, 'the network error that kept the request from Anthropic is kept');
+    A.eq(unreached.catalogHttpStatus(), 0, 'and it is not reported as an HTTP refusal');
+    reach = true;
+    A.eq((await unreached.listModels()).length, 1, 'a later answer loads the catalog');
+    A.eq(unreached.catalogFetchError(), null, 'and clears the network error');
+    const garbled = makeAnthropicProvider({ fetch: async () => new Response('<html>proxy</html>', { status: 200 }), key: 'KEY' });
+    A.eq(await garbled.listModels(), [], 'an answer that is not a model list is an empty catalog');
+    A.eq(garbled.catalogFetchError(), null, 'an ANSWERED request is never reported as unreachable');
+  }
+
+  // E. max_tokens default is bumped high (no silent 4096 truncation); explicit + catalog ceilings honored.
+  {
+    // E1: no explicit max_tokens, cold catalog -> the 32000 fallback (NOT the old 4096).
+    let captured = null;
+    const fetchImpl = async (url, init) => {
+      if (/\/models$/.test(url)) return new Response(JSON.stringify({ data: [{ id: 'claude-cap', display_name: 'X', max_output_tokens: 8192 }] }), { status: 200 });
+      captured = { body: JSON.parse(init.body) };
+      return new Response([line({ type: 'message_stop' }), ''].join('\n'), { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+    };
+    const p1 = makeAnthropicProvider({ fetch: fetchImpl, key: 'k' });
+    await collect(p1, { model: 'claude-unknown', messages: [{ role: 'user', content: 'hi' }] });
+    A.eq(captured.body.max_tokens, 32000, 'cold catalog + no explicit -> 32000 fallback (not 4096)');
+    // outputLimit (bug d3a76db3: the run's spend pool prices a call's output by it) is exactly what the adapter sends
+    A.eq(p1.outputLimit('claude-unknown'), 32000, 'outputLimit: the max_tokens a cold catalog sends (32000)');
+
+    // E2: explicit per-request max_tokens still wins unchanged.
+    captured = null;
+    await collect(p1, { model: 'claude-unknown', max_tokens: 512, messages: [{ role: 'user', content: 'hi' }] });
+    A.eq(captured.body.max_tokens, 512, 'explicit max_tokens is honored verbatim');
+
+    // E3: once the catalog is warm, the model's real ceiling is used.
+    const p2 = makeAnthropicProvider({ fetch: fetchImpl, key: 'k' });
+    await p2.listModels();   // warm the catalog
+    captured = null;
+    await collect(p2, { model: 'claude-cap', messages: [{ role: 'user', content: 'hi' }] });
+    A.eq(captured.body.max_tokens, 8192, "warm catalog -> the model's real max_output_tokens");
+    A.eq(p2.outputLimit('claude-cap'), 8192, "outputLimit: the warm catalog's max_output_tokens, the max_tokens it sends");
+
+    // E4: opts.maxTokens override applies when no explicit/catalog value is available.
+    const p3 = makeAnthropicProvider({ fetch: async (url, init) => { if (/\/models$/.test(url)) return new Response('{"data":[]}', { status: 200 }); captured = { body: JSON.parse(init.body) }; return new Response([line({ type: 'message_stop' }), ''].join('\n'), { status: 200, headers: { 'Content-Type': 'text/event-stream' } }); }, key: 'k', maxTokens: 16000 });
+    captured = null;
+    await collect(p3, { model: 'claude-unknown', messages: [{ role: 'user', content: 'hi' }] });
+    A.eq(captured.body.max_tokens, 16000, 'opts.maxTokens override applied when no explicit/catalog ceiling');
+    A.eq(p3.outputLimit('claude-unknown'), 16000, 'outputLimit: the configured max_tokens it sends');
+  }
+
+  // F. USER ATTACHMENTS: a user message with image_url parts maps to native Anthropic image blocks (base64 +
+  //    url source), text parts are preserved, and a plain-string user turn is unchanged.
+  {
+    const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42m"';   // shape only; content is opaque
+    const conv = _internals.messagesToAnthropic([
+      { role: 'user', content: [
+        { type: 'text', text: 'what is this?' },
+        { type: 'image_url', image_url: { url: 'data:image/png;base64,' + png } },
+        { type: 'image_url', image_url: { url: 'https://example.com/a.jpg' } }
+      ] }
+    ]);
+    A.eq(conv.messages[0].content[0], { type: 'text', text: 'what is this?' }, 'text part preserved');
+    A.eq(conv.messages[0].content[1], { type: 'image', source: { type: 'base64', media_type: 'image/png', data: png } }, 'data: URL image_url -> base64 image block');
+    A.eq(conv.messages[0].content[2], { type: 'image', source: { type: 'url', url: 'https://example.com/a.jpg' } }, 'http(s) image_url -> url image block');
+
+    const plain = _internals.messagesToAnthropic([{ role: 'user', content: 'just text' }]);
+    A.eq(plain.messages[0].content[0], { type: 'text', text: 'just text' }, 'plain string user turn unchanged');
+  }
+
+  // G. THINKING + EFFORT: the wire contract per model family. Before this the adapter emitted NO thinking
+  //    parameter at all and advertised ['none'], so a BYOK Anthropic Commander ran a non-thinking Claude.
+  {
+    let seen = null;
+    const bodyFetch = () => async (url, init) => {
+      if (/\/models$/.test(url)) return new Response('{"data":[]}', { status: 200 });
+      seen = JSON.parse(init.body);
+      return new Response([line({ type: 'message_stop' }), ''].join('\n'), { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+    };
+    const ask = async (model, providerOpts, reqOpts) => {
+      seen = null;
+      const p = makeAnthropicProvider(Object.assign({ fetch: bodyFetch(), key: 'k' }, providerOpts || {}));
+      await collect(p, Object.assign({ model, messages: [{ role: 'user', content: 'hi' }] }, reqOpts || {}));
+      return seen;
+    };
+
+    // G1: MODERN contract — adaptive thinking + output_config.effort, driven by the construction default.
+    let b = await ask('claude-opus-5', { reasoningEffort: 'high' });
+    A.eq(b.thinking, { type: 'adaptive' }, 'modern Claude -> thinking:{type:adaptive}');
+    A.eq(b.output_config, { effort: 'high' }, 'modern Claude -> output_config.effort carries the level');
+    A.eq(b.budget_tokens, undefined, 'modern Claude never sends budget_tokens (the wire 400s on it)');
+
+    // G2: a per-request effort beats the construction default (one agent dialled without a new provider).
+    b = await ask('claude-opus-5', { reasoningEffort: 'low' }, { reasoningEffort: 'max' });
+    A.eq(b.output_config.effort, 'max', 'req.reasoningEffort overrides the provider default');
+
+    // G3: 'none' disables — and deliberately sends NO effort, because the wire refuses a disabled thinking
+    //     block above `high` and an omitted effort leaves the always-accepted server default.
+    b = await ask('claude-opus-5', { reasoningEffort: 'none' });
+    A.eq(b.thinking, { type: 'disabled' }, "effort 'none' -> thinking disabled");
+    A.eq(b.output_config, undefined, 'a disable is sent WITHOUT an effort (xhigh/max + disabled is a 400)');
+
+    // G4: the 4.6 family predates `xhigh` — asking for it clamps UP to the strongest level it does publish.
+    A.eq(makeAnthropicProvider({ fetch: bodyFetch(), key: 'k' }).reasoningEfforts('claude-sonnet-4-6').indexOf('xhigh'), -1, '4.6 publishes no xhigh');
+    b = await ask('claude-sonnet-4-6', { reasoningEffort: 'xhigh' });
+    A.eq(b.output_config.effort, 'max', "xhigh on a 4.6 model clamps to 'max', never dropped");
+
+    // G5: LEGACY contract — manual budget_tokens, strictly below max_tokens, and no output_config.
+    b = await ask('claude-opus-4-5', { reasoningEffort: 'high' }, { max_tokens: 32000 });
+    A.eq(b.thinking.type, 'enabled', 'legacy Claude -> thinking:{type:enabled}');
+    A.eq(b.thinking.budget_tokens > 0 && b.thinking.budget_tokens < 32000, true, 'legacy budget_tokens sits below max_tokens');
+    A.eq(b.output_config, undefined, 'legacy Claude sends no output_config');
+
+    // G6: a ceiling too small to think under starves the answer — ask for no thinking rather than truncate.
+    b = await ask('claude-opus-4-5', { reasoningEffort: 'high' }, { max_tokens: 1000 });
+    A.eq(b.thinking, undefined, 'no room above the 1024 floor -> no thinking requested at all');
+
+    // G7: Fable/Mythos think unconditionally; 'none' is not offered and must never reach the wire as disabled.
+    A.eq(makeAnthropicProvider({ fetch: bodyFetch(), key: 'k' }).reasoningEfforts('claude-fable-5').indexOf('none'), -1, 'fable publishes no none (disabled is a 400 there)');
+    b = await ask('claude-fable-5', { reasoningEffort: 'none' });
+    A.eq(b.thinking, { type: 'adaptive' }, "'none' on fable clamps up instead of sending a rejected disable");
+
+    // #32: saved OFF settings must not send an unsupported disable to Opus 5.5.
+    for (const model of ['claude-opus-5-5', 'claude-opus-5.5', 'claude-opus-5-5-20260922']) {
+      const p = makeAnthropicProvider({ fetch: async () => new Response(JSON.stringify({ data: [{ id: model, display_name: 'Claude Opus 5.5' }] })), key: 'k' });
+      const catalog = await p.listModels();
+      const row = catalog.find(m => m.id === model);
+      A.ok(row && !row.reasoningEfforts.includes('none'), model + ' catalog does not offer OFF');
+      const Dock = require('../frontend/app/modeldock.js');
+      A.ok(!Dock._internals.effortOptionsFor(row).includes('none'), model + ' picker consumes the supported catalog levels');
+      for (const off of ['none', 'off', 'disabled']) {
+        b = await ask(model, { reasoningEffort: off });
+        A.eq(b.thinking, { type: 'adaptive', block_binding: { prefix_mismatch_behavior: 'drop_block' } }, model + ' saved ' + off + ' uses adaptive thinking (+ #73 drop_block binding)');
+        A.eq(b.output_config, { effort: 'low' }, model + ' saved ' + off + ' clamps to lowest supported effort');
+      }
+      b = await ask(model, { reasoningEffort: 'high' }, { reasoningEffort: 'none' });
+      A.eq(b.output_config, { effort: 'low' }, model + ' per-run OFF also clamps safely');
+      b = await ask(model, { reasoningEffort: 'max' });
+      A.eq(b.output_config, { effort: 'max' }, model + ' supported effort stays unchanged');
+    }
+
+    // G8: a NON-Claude model reached through an Anthropic-compatible baseUrl gets nothing (provider-compat law).
+    b = await ask('some-vendor/mixtral', { reasoningEffort: 'high' });
+    A.eq(b.thinking, undefined, 'non-Claude model on an anthropic-shaped endpoint gets no thinking parameter');
+    A.eq(b.output_config, undefined, 'non-Claude model gets no output_config either');
+  }
+
+  // H. REASONING BLOCKS: thinking must never leak into the answer, and a signed block must survive replay.
+  {
+    const sse = [
+      line({ type: 'content_block_start', index: 0, content_block: { type: 'thinking', thinking: '' } }),
+      line({ type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'let me ' } }),
+      line({ type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'check' } }),
+      line({ type: 'content_block_delta', index: 0, delta: { type: 'signature_delta', signature: 'sig123' } }),
+      line({ type: 'content_block_stop', index: 0 }),
+      line({ type: 'content_block_start', index: 1, content_block: { type: 'text', text: '' } }),
+      line({ type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: 'Answer.' } }),
+      line({ type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 9 } }),
+      line({ type: 'message_stop' }),
+      ''
+    ].join('\n');
+    const evs = await collect(makeAnthropicProvider({ fetch: sseFetch(sse), key: 'k' }), { model: 'claude-opus-5', messages: [{ role: 'user', content: 'hi' }] });
+    A.eq(evs.filter(e => e.type === 'text').map(e => e.delta).join(''), 'Answer.', 'thinking deltas NEVER become assistant text');
+    const reasoning = evs.filter(e => e.type === 'reasoning');
+    A.eq(reasoning.length, 1, 'one reasoning event per completed thinking block');
+    A.eq(reasoning[0].block, { type: 'thinking', thinking: 'let me check', signature: 'sig123', pos: { text: 0, tools: 0 } }, 'the block is assembled whole: text + signature (+ its position in the turn, #73)');
+
+    // An UNSIGNED block cannot be replayed (the wire validates the signature), so it is dropped at the source
+    // rather than handed on to fail the NEXT turn.
+    const unsigned = [
+      line({ type: 'content_block_start', index: 0, content_block: { type: 'thinking', thinking: '' } }),
+      line({ type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'partial' } }),
+      line({ type: 'content_block_stop', index: 0 }),
+      line({ type: 'message_stop' }),
+      ''
+    ].join('\n');
+    const evs2 = await collect(makeAnthropicProvider({ fetch: sseFetch(unsigned), key: 'k' }), { model: 'claude-opus-5', messages: [{ role: 'user', content: 'hi' }] });
+    A.eq(evs2.filter(e => e.type === 'reasoning').length, 0, 'an unsigned thinking block is dropped, not replayed');
+
+    // REPLAY ORDER is load-bearing: the thinking block must precede the tool_use it reasoned toward.
+    const conv = _internals.messagesToAnthropic([
+      { role: 'user', content: 'go' },
+      { role: 'assistant', content: 'ok', reasoning: [{ type: 'thinking', thinking: 't', signature: 's' }], tool_calls: [{ id: 'c1', function: { name: 'fs_read', arguments: '{}' } }] }
+    ]);
+    const a = conv.messages[1].content;
+    A.eq(a[0], { type: 'thinking', thinking: 't', signature: 's' }, 'reasoning block replays FIRST in the assistant turn');
+    A.eq(a[1].type, 'text', 'text follows the thinking block');
+    A.eq(a[2].type, 'tool_use', 'tool_use follows both');
+
+    // A message with no reasoning is byte-identical to the pre-thinking shape (every other provider).
+    const plain = _internals.messagesToAnthropic([{ role: 'assistant', content: 'hi' }]);
+    A.eq(plain.messages[0].content, [{ type: 'text', text: 'hi' }], 'no reasoning field -> unchanged assistant turn');
+  }
+
+  A.eq(_internals.normalizeUsage({ input_tokens: 1, cache_read_input_tokens: 2, output_tokens: 3 }).prompt_tokens, 3, 'cache read tokens are included in prompt total');
+  // Cross-run caching: changing runtime metadata must preserve a stable cache boundary,
+  // without dropping/reclassifying any system instructions, history or tool definitions.
+  {
+    const prefix = 'Follow every task check and skill. '.repeat(150);
+    const history = [{role:'user',content:'do the task'}, {role:'assistant',content:'checking'}, {role:'user',content:'continue'}];
+    let first;
+    for (const run of ['run-a','run-b']) {
+      let body;
+      const p = makeAnthropicProvider({key:'k',fetch:async (_,o)=>{body=JSON.parse(o.body);return new Response('data: {"type":"message_stop"}\n\n');}});
+      const text = prefix + '\n[RUNTIME] Run id: ' + run + '\nUse the required approval and verification steps.';
+      const messages=[{role:'system',content:text},...history]; const snapshot=JSON.stringify(messages);
+      await collect(p,{model:'claude-test',messages,cacheSystemPrefix:prefix,tools:[{type:'function',function:{name:'verify',description:'verify work',parameters:{type:'object',properties:{}}}}]});
+      A.eq(body.system.map(b=>b.text).join(''),text,'split preserves every system byte');
+      A.eq(body.system.length,2,'stable and changing context have separate blocks');
+      // lean-prompt 2026-10-12: with tools present the budget is tools 1 + the STABLE system block 1 + 2 tail anchors
+      // (it was both system blocks + 2 tail); the per-run tail block rides uncached, as the per-run note now does.
+      A.ok(body.system[0].cache_control && !body.system[1].cache_control,'the stable boundary stays cacheable; the changing tail is not anchored');
+      A.ok(body.tools[body.tools.length-1].cache_control,'the tool catalogue carries its own anchor');
+      A.eq((JSON.stringify(body).match(/cache_control/g)||[]).length,4,'four-breakpoint budget includes tail');
+      A.eq(body.messages.map(m=>m.content.some(b=>b.cache_control)),[false,true,true],'two sliding tail anchors: the newest turn and the reply before it');
+      A.eq(body.tools[0].name,'verify','verification tool retained');
+      A.eq(body.messages.map(m=>m.role),history.map(m=>m.role),'history roles unchanged');
+      A.eq(JSON.stringify(messages),snapshot,'cache decoration never mutates history');
+      if(first) A.eq(body.system[0],first,'stable cache block identical across run IDs');
+      first=body.system[0];
+    }
+    for(const invalid of ['', 'not a prefix']) {
+      let body;const p=makeAnthropicProvider({key:'k',fetch:async(_,o)=>{body=JSON.parse(o.body);return new Response('data: {"type":"message_stop"}\n\n');}});
+      await collect(p,{model:'claude-test',messages:[{role:'system',content:'policy'}],cacheSystemPrefix:invalid});
+      A.eq(body.system.length,1,'mismatch uses unchanged legacy block');
+      A.eq(body.system[0].text,'policy','mismatch never drops text');
+    }
+  }
+  /* RUN CONTEXT NOTE (lean-prompt 2026-10-12). The per-run block now rides a fenced system note placed with the newest
+     user message. On a conversation's FIRST message nothing precedes it but the system prompt — the leading-system
+     hoist must stop at it, or message 1's system would differ from message 2's. It becomes part of the user turn. */
+  {
+    const provider = require('../sidecar/providers/provider.js');
+    const note = provider.runContextNote('[RUNTIME]\nRun id: r1');
+    const first = _internals.messagesToAnthropic([{ role: 'system', content: 'S' }, { role: 'system', content: note }, { role: 'system', content: '<recalled-memory>\nm\n</recalled-memory>' }, { role: 'user', content: 'hi' }]);
+    A.eq(first.system, 'S', 'first message: the run-context note is NOT hoisted into the system prompt');
+    A.eq(first.messages, [{ role: 'user', content: [{ type: 'text', text: note }, { type: 'text', text: '<recalled-memory>\nm\n</recalled-memory>' }, { type: 'text', text: 'hi' }] }],
+      'first message: note, recall and the request merge into ONE user turn (the request still ends on it)');
+    const later = _internals.messagesToAnthropic([{ role: 'system', content: 'S' }, { role: 'user', content: 'hi' }, { role: 'assistant', content: 'yo' }, { role: 'system', content: provider.runContextNote('[RUNTIME]\nRun id: r2') }, { role: 'user', content: 'again' }]);
+    A.eq(later.system, first.system, 'second message: the system prompt is byte-identical to the first message\'s');
+    A.eq(later.messages.map(m => m.role), ['user', 'assistant', 'user'], 'second message: roles alternate, ending on the user turn');
+  }
+  A.report('provider.anthropic.test');
+})().catch(e => { console.log('FAIL: provider.anthropic.test threw -- ' + (e && e.stack || e)); process.exit(1); });

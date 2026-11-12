@@ -1,0 +1,615 @@
+/* sidecar/runstore.js — the append-only run-history logbook (M-save P4).
+
+   The spend ledger records the COST of each run; this records the OUTCOME — one immutable line per finished
+   run ({ runId, agentId, reason, turns, tokens, usd, title, ts }). The full message log is discarded once the
+   SSE stream closes, so without this a finished run leaves no durable trace of WHAT happened, only what it
+   cost. This is the substrate the plan's "drill any fact to the run that earned it" vision needs, and what a
+   future autopsy/replay view reads. It does NOT learn or propose memories — that is the cortex's job, fed by
+   the live message array at run end; this is purely the durable record.
+
+   Same split as the ledger: PURE given an injected `io` (readAll/append — the host owns the fsync'd disk
+   append) and `clock`. No ambient time/IO, so it passes lint-determinism and tests headlessly with an
+   in-memory io. A missing/corrupt file -> empty history (fail-open; a run is never crashed by an unreadable log).
+
+   makeRunStore({ io, clock, limit? }) -> {
+     record({ runId, agentId, reason, turns, tokens, usd, title, artifacts? }) -> entry,   // stamps ts, appends, returns it
+     list(agentId?, { limit }?) -> entry[]   // newest-first; filtered to agentId when given; capped
+     all() -> entry[],   count() -> int
+   }
+
+   Work-visibility slice 1 (ADDITIVE): `artifacts` — what the run PRODUCED, as small sanitized records
+   ({ kind:'file'|'image'|'message', path?, target?, bytes? }, max 50, strings cut at 260). Collected by
+   sidecar/artifacts.js during the run; defaults to []. Rows persisted before the field existed simply
+   lack it and still parse/list fine (fail-open — proven in runstore.test.js).
+
+   Roster-honesty P1.2 (ADDITIVE): `identityFallback` — TRUE when the run's agentId was missing from the roster so
+   the run executed on the station-persona/default-model FALLBACK rather than the named specialist. An honest
+   durable marker (never impersonate silently). Defaults false; old rows lack it and parse fine.
+
+   Deliverable organization (ADDITIVE): `projectRoot` — the blessed project folder this run was scoped to, so the
+   work a run PRODUCES can be filed under the thing the Commander was working ON. Same additive-provenance shape as
+   `recipeId`: old rows lack it and default ''. The caller records it ONLY when the root is still a standing path
+   grant — an unblessed/revoked root files nothing, because the station must never assert a project relationship the
+   grant layer can't prove.
+
+   INTERRUPTED RUNS (ADDITIVE, 2026-09-22): a run whose process died mid-flight never reached run end, so it left no
+   row at all. The host's boot scan of the run journal now records ONE row for it with reason 'interrupted' (the
+   ORIGINAL run's execution terminal — true forever) plus a `recoveryStatus` (recoverable | needs_review | resolved |
+   recovering | continued | forensic), `continuedRunId`/`continuedReason` once a continuation settled, `spendUnknown`
+   (the ledger books spend at run end, so an interrupted run's spend is NOT known — never read its usd:0 as "free"),
+   and a plain `error` line. A continuation run's own row carries `recoveryOf` = the interrupted runId.
+   Representation: the log stays append-only. When the recovery status changes the host appends a newer row for the
+   SAME runId, and every read (list/all/count/latest) collapses a chain whose first row is 'interrupted' into ONE row:
+   the newest row's content at the first row's position and ts. So history never shows a stale "recoverable" beside
+   the continuation's outcome; the interrupted run and its continuation stay two linked rows (two real runs). */
+'use strict';
+(function (root, factory) {
+  const api = factory();
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else { (root.SK = root.SK || {}).runstore = api; }
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+  // failopen.note — the tagged SYNC swallow (per-tag count + throttled warn): a fail-open catch must never be invisible.
+  const { note: failNote } = (typeof require === 'function') ? require('./failopen.js') : { note: function (tag, e) { console.warn('[failopen] ' + tag + ':', (e && e.message) || e); } };
+  // TYPED OUTCOMES: the one outcome resolver (frontend/app/runoutcome.js) — every new row records the code every surface reads
+  const RunOutcome = (typeof require === 'function') ? require('../frontend/app/runoutcome.js') : ((typeof globalThis !== 'undefined' && globalThis.RunOutcome) || null);
+  // TURN IDENTITY: the turnId grammar and the quote capacity (frontend/app/turnkinds.js, the module the page loads too)
+  const TurnKinds = (typeof require === 'function') ? require('../frontend/app/turnkinds.js') : ((typeof globalThis !== 'undefined' && globalThis.TurnKinds) || null);
+
+  // Sets, not object literals: `({a:1})['constructor']` is truthy, so an object-literal allowlist
+  // silently admits every Object.prototype key — and these keys come off persisted/model-supplied data.
+  const REASONS = new Set(['done', 'max_iters', 'budget', 'cancelled', 'error', 'empty', 'refusal', 'clarifying', 'interrupted']);
+  const RECOVERY_STATUSES = new Set(['recoverable', 'needs_review', 'resolved', 'recovering', 'continued', 'forensic']);
+  // how an interrupted run's spend was settled (ledger.js ATTESTED_AS): one vocabulary, or a one-click settlement would never
+  // restamp its row and the history scan would re-append it from the ledger every time
+  const SETTLED_AS = new Set(['entered', 'limit', 'recorded', 'assumed']);
+  const ERROR_MAX = 240;
+  const DEFAULT_LIMIT = 200;        // a sane cap so list() never returns an unbounded history
+  const TITLE_MAX = 120;
+  const UNKNOWN_MODEL = '(unknown)';
+  const ARTIFACT_KINDS = new Set(['file', 'image', 'message']);
+  const ARTIFACTS_MAX = 50;         // a run that writes 500 files still records a bounded row
+  const ARTIFACT_STR_MAX = 260;     // classic MAX_PATH — a path/target is a display label, not a blob
+  const SESSION_TITLE_MAX = 80;
+  const PROJECT_ROOT_MAX = 4096;    // matches handleRun's own clamp on the incoming projectRoot
+  const DELIVERABLE_KINDS = new Set(['doc', 'data', 'page', 'patch', 'image', 'files']);   // mirrors tools/builtin/deliverable.js
+  const DELIVERY_PROMPT_MAX = 4000;
+  const DELIVERY_TEXT_MAX = 24000;
+  // Dispatch completion is assessed AFTER the execution loop (including one optional result repair).
+  // Its envelope is separate from the immutable execution outcome and spend.
+  const DELIVERY_PATCH_KIND = 'dispatch-delivery';
+  function dispatchDelivery(v) {
+    if (!v || !['pending', 'internal', 'final'].includes(v.state)) return null;
+    if (v.state !== 'final') return { state: v.state };
+    const out = { state: 'final', text: str(v.text).slice(0, DELIVERY_TEXT_MAX),
+      reason: str(v.reason).trim().slice(0, 80) || 'error', repairRunId: str(v.repairRunId).slice(0, 100) };
+    if (Number.isSafeInteger(v.textLength) && v.textLength >= out.text.length && /^[a-f0-9]{64}$/.test(str(v.textSha256))) {
+      out.textLength = v.textLength; out.textSha256 = v.textSha256;
+    }
+    return out;
+  }
+  const TOOL_TRACE_MAX = 200;
+  const TOOL_SUMMARY_MAX = 240;
+  const FAILURE_FIELD_MAX = 80;
+  const UNCERTAIN_MUTATIONS_MAX = 200;
+  const COMPLETION_ROWS_MAX = 100;
+  const RECOVERY_ATTEMPTS_MAX = 100;
+  const ID_RE = /^[A-Za-z0-9_-]{1,80}$/;   // a floor prop id (lineId = its INBOX's id, dockId = the bay's id)
+  /* TURN IDENTITY (additive, turn-identity): which turn a run answered and the transcript rows it stood on, noted while the
+     run is live (runStore.noteIdentity) and merged into that run's next record(). Only these keys, each checked; anything
+     else is dropped and counted. */
+  const IDENTITY_NOTES_MAX = 500;
+  const IDENTITY_KEYS = ['turnId', 'directiveRowId', 'windowRowIds', 'quotes', 'quotesAt', 'quotesSaturatedAt'];
+  const SID_RE = /^[A-Za-z0-9_-]{1,64}$/;   // the workstream grammar transcriptstore.js validates a quoted stream id against
+  const SHA256_RE = /^[a-f0-9]{64}$/;
+  const safeNonNeg = v => Number.isSafeInteger(v) && v >= 0;
+  function windowRowIdsOf(v) {
+    if (!v || typeof v !== 'object' || !safeNonNeg(v.first) || !safeNonNeg(v.last) || !safeNonNeg(v.count) || !SHA256_RE.test(str(v.sha256))) return null;
+    return { first: v.first, last: v.last, count: v.count, sha256: v.sha256 };
+  }
+  // the TurnKinds.quoteStamp form: up to QUOTES_MAX stream ids aligned 1:1 with their read times, or the saturated ['*'] + [satAt]
+  function quoteStampOf(quotes, quotesAt) {
+    if (!Array.isArray(quotes) || !Array.isArray(quotesAt) || !quotes.length || quotes.length !== quotesAt.length) return null;
+    if (!quotesAt.every(safeNonNeg)) return null;
+    if (quotes.length === 1 && quotes[0] === '*') return { quotes: ['*'], quotesAt: [quotesAt[0]] };
+    const max = TurnKinds ? TurnKinds.QUOTES_MAX : 32;
+    if (quotes.length > max || !quotes.every(q => typeof q === 'string' && SID_RE.test(q)) || new Set(quotes).size !== quotes.length) return null;
+    return { quotes: quotes.slice(), quotesAt: quotesAt.slice() };
+  }
+  function num(v) { return (typeof v === 'number' && isFinite(v)) ? v : 0; }
+  function nonnegative(v) { return Math.max(0, num(v)); }
+  function str(v) { return v == null ? '' : String(v); }
+  function modelName(v) { const s = str(v).trim(); return (s || UNKNOWN_MODEL).slice(0, 80); }
+  // sanitize the collector's artifact records at the persistence boundary (defense in depth: the collector
+  // already caps, but a foreign caller can't write an unbounded/garbage blob into the append-only log).
+  function artifactList(v) {
+    if (!Array.isArray(v)) return [];
+    const out = [];
+    for (const a of v) {
+      if (out.length >= ARTIFACTS_MAX) break;
+      if (!a || typeof a !== 'object' || !ARTIFACT_KINDS.has(a.kind)) continue;
+      const rec = { kind: a.kind };
+      if (a.path != null && str(a.path)) rec.path = str(a.path).slice(0, ARTIFACT_STR_MAX);
+      if (a.target != null && str(a.target)) rec.target = str(a.target).slice(0, ARTIFACT_STR_MAX);
+      if (typeof a.bytes === 'number' && isFinite(a.bytes) && a.bytes >= 0) rec.bytes = Math.floor(a.bytes);
+      if (rec.path || rec.target) out.push(rec);
+    }
+    return out;
+  }
+
+  /* The agent's own prose name for what the run produced (the deliverable_note tool). Sanitized AGAIN here at the
+     persistence boundary, the same defense-in-depth the artifact list gets: the tool already allowlists its four
+     keys, but this log must stay safe against any other caller. Note what is NOT here — no status, no crew, no
+     bytes, no "verified". Those are harness facts derived from this very row; a model-supplied copy of them could
+     only ever be a competing claim. Absent/garbage -> null, and the row simply has no authored name. */
+  function deliverableNote(v) {
+    if (!v || typeof v !== 'object') return null;
+    const title = str(v.title).replace(/\s+/g, ' ').trim().slice(0, 80);
+    if (!title) return null;
+    const kind = str(v.kind).trim().toLowerCase();
+    return {
+      title: title,
+      summary: str(v.summary).replace(/\s+/g, ' ').trim().slice(0, 240),
+      kind: DELIVERABLE_KINDS.has(kind) ? kind : 'files',
+      main: str(v.main).trim().slice(0, ARTIFACT_STR_MAX)
+    };
+  }
+
+  // what a cancel interrupted (record's `cancelledWhile`, loop.js #99): the model-call wait phase (the agent.waiting
+  // enum), how long it had lasted, the adapter's facts. Bounded at the persistence boundary; anything else is dropped.
+  const WAIT_PHASES = new Set(['connect', 'first_byte', 'streaming', 'retry_backoff']);
+  function cancelledWhileOf(v) {
+    if (!v || typeof v !== 'object' || !WAIT_PHASES.has(v.phase)) return null;
+    const out = { phase: v.phase };
+    const ms = Number(v.waitedMs);
+    if (Number.isFinite(ms) && ms >= 0) out.waitedMs = Math.round(ms);
+    const note = str(v.note).replace(/\s+/g, ' ').trim().slice(0, 240);
+    if (note) out.note = note;
+    return out;
+  }
+
+  // the page-closed note (record's `pageClosed`), bounded at the persistence boundary like every other host field
+  function pageClosedOf(v) {
+    if (!v || typeof v !== 'object') return null;
+    const waitingOn = (Array.isArray(v.waitingOn) ? v.waitingOn : []).slice(0, 16)
+      .map(s => str(s).replace(/\s+/g, ' ').trim().slice(0, 200)).filter(Boolean).slice(0, 4);
+    return { at: nonnegative(v.at), waitingOn };
+  }
+
+  // the run's SEND NOW ledger (record's `steerNotes`, from steer-buffer ledgerOf): which page-made note ids it read.
+  // Ids only (the page keeps the words); bounded like every other host field.
+  function steerNotesOf(v) {
+    if (!Array.isArray(v)) return [];
+    const out = [];
+    for (const n of v.slice(0, 256)) {
+      if (out.length >= 32) break;
+      if (!n || typeof n !== 'object' || !/^[A-Za-z0-9_-]{1,64}$/.test(str(n.id))) continue;
+      out.push({ id: str(n.id), applied: n.applied === true });
+    }
+    return out;
+  }
+
+  function toolTraceList(v) {
+    if (!Array.isArray(v)) return [];
+    const out = [];
+    for (const t of v) {
+      if (out.length >= TOOL_TRACE_MAX) break;
+      if (!t || typeof t !== 'object') continue;
+      const callId = str(t.callId).slice(0, 100);
+      const name = str(t.name).slice(0, 80);
+      if (!callId || !name) continue;
+      out.push({
+        callId, name, ok: !!t.ok, isError: !!t.isError,
+        ms: nonnegative(t.ms), summary: str(t.summary).slice(0, TOOL_SUMMARY_MAX),
+        startedAt: nonnegative(t.startedAt), endedAt: nonnegative(t.endedAt)
+      });
+    }
+    return out;
+  }
+
+  function uncertainMutationList(v) {
+    if (!Array.isArray(v)) return [];
+    const out = [];
+    for (const item of v) {
+      if (out.length >= UNCERTAIN_MUTATIONS_MAX) break;
+      if (!item || typeof item !== 'object') continue;
+      const callId = str(item.callId).slice(0, 100);
+      const name = str(item.name).slice(0, 80);
+      if (!callId || item.mutating !== true) continue;
+      out.push({ callId, name, mutating: true, state: 'dispatched' });
+    }
+    return out;
+  }
+
+  function completionEvidence(v, authority) {
+    const allowedEffects = new Set(['no_observed_effects', 'unverified_effects', 'judgment_required', 'mechanically_verified']);
+    const allowedStates = new Set(['unverified', 'judgment_required', 'mechanically_verified']);
+    const allowedVerdicts = new Set(['not_assessed', 'verification_required', 'incomplete', 'completed_verified']);
+    const src = v && typeof v === 'object' ? v : {};
+    const effects = [];
+    for (const item of (Array.isArray(src.effects) ? src.effects : [])) {
+      if (effects.length >= COMPLETION_ROWS_MAX) break;
+      if (!item || typeof item !== 'object') continue;
+      const callId = str(item.callId).slice(0, 100), tool = str(item.tool).slice(0, 80);
+      if (!callId || !tool || !allowedStates.has(item.state)) continue;
+      effects.push({
+        callId, tool, domain: str(item.domain).slice(0, 20), target: str(item.target).slice(0, ARTIFACT_STR_MAX),
+        state: item.state, evidence: (Array.isArray(item.evidence) ? item.evidence : []).slice(0, 20).map(x => str(x).slice(0, 40))
+      });
+    }
+    const contract = src.contract && src.contract.schemaVersion === 'starnet.task-postconditions.v1'
+      && src.contract.authority === 'commander' && Array.isArray(src.contract.requirements)
+      ? {
+          schemaVersion: src.contract.schemaVersion, authority: 'commander',
+          requirements: src.contract.requirements.slice(0, 20).filter(x => x && typeof x === 'object').map(x => ({
+            id: str(x.id).slice(0, 80), type: str(x.type).slice(0, 40), path: str(x.path).slice(0, ARTIFACT_STR_MAX),
+            text: str(x.text).slice(0, 500), command: str(x.command).slice(0, 1000), sha256: str(x.sha256).slice(0, 64),
+            // typed connector read-back (2026-08-22): the durable row names WHAT was read back, never the args
+            // payload (it may carry user data) and never the observed text.
+            connector: str(x.connector).slice(0, 80), tool: str(x.tool).slice(0, 80), contains: str(x.contains).slice(0, 500), regex: str(x.regex).slice(0, 500)
+          }))
+        } : null;
+    const checks = (Array.isArray(src.checks) ? src.checks : []).slice(0, 20).filter(x => x && typeof x === 'object').map(x => ({
+      id: str(x.id).slice(0, 80), type: str(x.type).slice(0, 40),
+      status: x.status === 'passed' ? 'passed' : 'failed', code: str(x.code).slice(0, 80)
+    }));
+    let completionVerdict = allowedVerdicts.has(src.completionVerdict) ? src.completionVerdict : 'not_assessed';
+    const hostAssessed = !!authority && src._completionAuthority === authority;
+    const structurallyVerified = !!contract && checks.length === contract.requirements.length && checks.length > 0
+      && checks.every(x => x.status === 'passed') && src.effectVerdict !== 'unverified_effects' && src.effectVerdict !== 'judgment_required';
+    if (!hostAssessed) completionVerdict = 'not_assessed';
+    else if (completionVerdict === 'completed_verified' && !structurallyVerified) completionVerdict = 'verification_required';
+    const out = {
+      schemaVersion: 'starnet.completion-evidence.v1',
+      completionVerdict,
+      effectVerdict: allowedEffects.has(src.effectVerdict) ? src.effectVerdict : 'no_observed_effects',
+      effects
+    };
+    if (hostAssessed) {
+      out.contract = contract;
+      out.contractErrors = (Array.isArray(src.contractErrors) ? src.contractErrors : []).slice(0, 20).map(x => str(x).slice(0, 200));
+      out.checks = checks;
+    }
+    return out;
+  }
+
+  function recoveryAttemptList(v) {
+    if (!Array.isArray(v)) return [];
+    return v.slice(0, RECOVERY_ATTEMPTS_MAX).filter(x => x && typeof x === 'object').map((x, index) => ({
+      sequence: nonnegative(x.sequence) || index + 1,
+      stage: str(x.stage).slice(0, 80), action: str(x.action).slice(0, 40), reason: str(x.reason).slice(0, 80),
+      attempt: nonnegative(x.attempt), model: str(x.model).slice(0, 80), delayMs: nonnegative(x.delayMs)
+    }));
+  }
+
+  // RAM mirror ceiling: the largest served query is list({ limit: 1000 }) (insights) / 500 (run list), so keep
+  // generous headroom (~3x) and splice the oldest off when the in-process mirror grows past it. On-disk history
+  // stays complete (the append-only log + its rotated segment); only the RAM mirror is bounded so a 24/7 process
+  // can't grow it without limit. Disk boot-load is already bounded (readBoundedJsonl), so this matches behavior:
+  // the whole-station insights fold already reads only the most-recent bounded window, never lifetime history.
+  const RAM_ROWS_MAX = 10000;       // matches the browser progression catch-up's bounded replay horizon
+
+  function makeRunStore(opts) {
+    opts = opts || {};
+    const io = opts.io || { readAll() { return []; }, append() {} };
+    const clock = opts.clock || { now() { return 0; } };
+    const cap = num(opts.limit) || DEFAULT_LIMIT;
+    const ramMax = num(opts.ramMax) > 0 ? num(opts.ramMax) : RAM_ROWS_MAX;
+
+    // in-memory mirror loaded once; append keeps RAM + disk in lockstep so list() is O(n) over RAM.
+    let rows = [];
+    try { const raw = io.readAll(); if (Array.isArray(raw)) rows = raw.filter(r => r && typeof r === 'object'); }
+    catch (e) { rows = []; }
+    if (rows.length > ramMax) rows = rows.slice(rows.length - ramMax);   // bound even a large bounded-boot load
+
+    // Interrupted-run chains: runId -> { first, latest } for every runId whose FIRST retained row is 'interrupted';
+    // `updates` holds the later rows of those chains, which are never served on their own (see header).
+    let chains = new Map();
+    let updates = new Set();
+    let deliveries = new Map();
+    const unpersisted = new Set();
+    function track(r) {
+      const id = r && r.runId;
+      if (!id) return;
+      if (r.kind === DELIVERY_PATCH_KIND) {
+        updates.add(r);
+        const envelope = dispatchDelivery(r.dispatchDelivery);
+        if (envelope && envelope.state === 'final' && !deliveries.has(id)) deliveries.set(id, envelope);
+        return;
+      }
+      const c = chains.get(id);
+      if (c) { c.latest = r; updates.add(r); return; }
+      if (r.reason === 'interrupted') chains.set(id, { first: r, latest: r });
+    }
+    function reindex() {
+      chains = new Map(); updates = new Set(); deliveries = new Map(); for (const r of rows) track(r);
+      if (unpersisted.size) { const retained = new Set(rows.map(r => r.runId)); for (const id of unpersisted) if (!retained.has(id)) unpersisted.delete(id); }
+    }
+    reindex();
+    function view(r) {
+      const c = r.runId ? chains.get(r.runId) : null;
+      const out = !c || c.first !== r || c.latest === r ? Object.assign({}, r) : Object.assign({}, c.latest, { ts: r.ts });
+      const final = deliveries.get(r.runId);
+      if (out.dispatchDelivery && out.dispatchDelivery.state === 'pending' && final) out.dispatchDelivery = Object.assign({}, final);
+      else if (out.dispatchDelivery) out.dispatchDelivery = Object.assign({}, out.dispatchDelivery);
+      return out;
+    }
+
+    /* noteIdentity(runId, fields): a live run's turn identity, kept until that run's next record() takes it. Admits only
+       turnId (the TurnKinds grammar), directiveRowId (a positive safe integer), windowRowIds ({first, last, count} safe
+       integers + a sha256), quotes/quotesAt (the quote stamp form) and quotesSaturatedAt; any other key, or a value that
+       fails its check, is dropped and counted. Bounded: past IDENTITY_NOTES_MAX runs the oldest note is evicted, counted. */
+    const identities = new Map();   // runId -> admitted identity fields
+    // the one check of a run's identity fields (noteIdentity's note, and the identity a row given to record() already
+    // carries): copies each admissible field into `into`, returns how many it dropped
+    function admitIdentity(fields, into) {
+      let dropped = 0;
+      for (const k of Object.keys(fields)) {
+        const v = fields[k];
+        if (k === 'turnId') { if (TurnKinds && TurnKinds.isTurnId(v)) into.turnId = v; else dropped++; }
+        else if (k === 'directiveRowId') { if (Number.isSafeInteger(v) && v > 0) into.directiveRowId = v; else dropped++; }
+        else if (k === 'windowRowIds') { const w = windowRowIdsOf(v); if (w) into.windowRowIds = w; else dropped++; }
+        else if (k === 'quotesSaturatedAt') { if (safeNonNeg(v)) into.quotesSaturatedAt = v; else dropped++; }
+        else if (k !== 'quotes' && k !== 'quotesAt') dropped++;
+      }
+      if (Object.prototype.hasOwnProperty.call(fields, 'quotes') || Object.prototype.hasOwnProperty.call(fields, 'quotesAt')) {
+        const q = quoteStampOf(fields.quotes, fields.quotesAt);
+        if (q) { into.quotes = q.quotes; into.quotesAt = q.quotesAt; } else dropped++;
+      }
+      return dropped;
+    }
+    function noteIdentity(runId, fields) {
+      const id = str(runId);
+      if (!id || !fields || typeof fields !== 'object') return false;
+      const next = Object.assign({}, identities.get(id) || {});
+      const dropped = admitIdentity(fields, next);
+      if (dropped) failNote('runstore.noteIdentity', new Error(dropped + ' identity field(s) dropped for run ' + id));
+      if (!Object.keys(next).length) return false;
+      identities.delete(id);
+      identities.set(id, next);   // newest last
+      while (identities.size > IDENTITY_NOTES_MAX) {
+        const oldest = identities.keys().next().value;
+        identities.delete(oldest);
+        failNote('runstore.noteIdentity', new Error('identity note evicted unrecorded for run ' + oldest));
+      }
+      return true;
+    }
+
+    function record(e) {
+      e = e || {};
+      const entry = {
+        runId: str(e.runId), parentRunId: str(e.parentRunId).slice(0, 100), agentId: str(e.agentId),
+        provider: str(e.provider).trim().slice(0, 60),
+        // WIRE SOURCE (additive, run-wire-resolver lane): which level of the one {provider, model} resolution chose this run's
+        // pair (sidecar/run-wire.js: explicit | routine | agent | station | connect | env). Present only when known.
+        ...(/^[a-z]{1,20}$/.test(str(e.wireSource)) ? { wireSource: str(e.wireSource) } : {}),
+        // clamp to the known enum (matches agent.run.end). An unknown or missing reason is not proof the run finished, so it
+        // records as 'error', never 'done' (bug 812c3bfb: a thrown run read as a finished one in the history)
+        reason: REASONS.has(e.reason) ? e.reason : 'error',
+        turns: num(e.turns), tokens: num(e.tokens), usd: num(e.usd),
+        // (additive, token-burn audit 2026-10-17) how much of `tokens`' input the provider served from its prompt cache —
+        // `tokens` counts a cache read at full weight. Present only when > 0, so every other row stays byte-identical.
+        ...(num(e.cachedTokens) > 0 ? { cachedTokens: num(e.cachedTokens) } : {}),
+        title: str(e.title).slice(0, TITLE_MAX),
+        streamId: str(e.streamId),     // H3.2: the run's workstream — joins this outcome row to its transcript (GET /api/transcript?stream=)
+        // Durable session-delivery envelope. The page bridge is best-effort (and multiple open pages may disagree
+        // about local session ids), so a later page can reconcile a completed worker by its stable title + runId.
+        sessionTitle: str(e.sessionTitle).trim().slice(0, SESSION_TITLE_MAX),
+        deliveryPrompt: str(e.deliveryPrompt).slice(0, DELIVERY_PROMPT_MAX),
+        deliveryText: str(e.deliveryText).slice(0, DELIVERY_TEXT_MAX),
+        ...(dispatchDelivery(e.dispatchDelivery) ? { dispatchDelivery: dispatchDelivery(e.dispatchDelivery) } : {}),
+        recipeId: str(e.recipeId).slice(0, 60),   // provenance spine (additive): WHICH recipe launched this run ('' for non-recipe runs; old rows lack it and default '')
+        projectRoot: str(e.projectRoot).slice(0, PROJECT_ROOT_MAX),   // deliverable organization (additive): the BLESSED project folder this run was scoped to ('' when unscoped/unblessed)
+        deliverable: deliverableNote(e.deliverable),                  // deliverable organization (additive): the agent's own PROSE name for the work (null when it never named it)
+        reasoningEffort: str(e.reasoningEffort).trim().slice(0, 20),
+        model: modelName(e.model),   // H3.3/G6: actual model used, or explicit (unknown) as a last resort
+        unmetered: !!e.unmetered,    // G6.2: subscription usage is counted, not summed as $0 spend
+        ...(e.unpriced === true ? { unpriced: true } : {}),   // (additive) tokens with NO published price: its usd is unknown, not $0
+        ...(e.usageMissing === true ? { usageMissing: true } : {}),   // (additive) a Stop cut a call off mid-stream before its usage arrived: usd is a floor
+        artifacts: artifactList(e.artifacts),   // work-visibility: what the run PRODUCED (additive; [] default)
+        toolsOk: num(e.toolsOk),                // crate-honesty (additive): successful tool results — proven work, not just talk. Old rows default 0.
+        identityFallback: !!e.identityFallback, // P1.2 (additive): TRUE when this run's agentId was MISSING from the roster and it ran on the station-persona/default-model fallback — an honest marker that it was NOT the named specialist. Old rows lack it and default false.
+        internal: !!e.internal,                 // progression catch-up excludes harness self-talk from agent work
+        surface: e.surface === 'interactive' || e.surface === 'autonomous' ? e.surface : '',
+        clarifying: !!e.clarifying,             // additive outcome truth; `reason` remains the execution terminal
+        // STEP-THROUGH TEST (additive, 2026-09-22): TRUE only when the handoff this run was handed had been EDITED
+        // by the owner before it continued — history must never claim an agent wrote the owner's words. Present
+        // only when true, so every other row stays byte-identical.
+        ...(e.handoffEdited ? { handoffEdited: true } : {}),
+        // STEP TEST ROW (additive, sweep 2026-09-25): TRUE when the run was a step-through test / try-this-step hop,
+        // set by the host that ran it (never re-derived from a stream prefix). The line stats count these apart —
+        // a test is not a job the line shipped or failed. Present only when true.
+        ...(e.stepTest ? { stepTest: true } : {}),
+        // OWNER DIRECTIVE (additive, 2026-10-12): TRUE only when the host proved this run's directive is the
+        // Commander's own (their typed COMMS turn, or the bound owner's direct chat). A channel group guest's run looks
+        // exactly like the owner's by surface and streamId, so ambient activity and repeat-work proof need this stamp;
+        // old rows lack it and prove nothing. Present only when true, so every other row stays byte-identical.
+        ...(e.ownerDirective === true ? { ownerDirective: true } : {}),
+        // LINE WATCH (additive, 2026-09-23): WHICH work line and WHICH bay (dock prop id) this run worked AT, set
+        // by the host that dispatched it (hub / chain hop / routine / step test) — never re-derived from a stream
+        // prefix. The per-line stats plate and the bay status lamps read these. Present only when known, so every
+        // other row stays byte-identical.
+        ...(ID_RE.test(str(e.lineId)) ? { lineId: str(e.lineId) } : {}),
+        ...(ID_RE.test(str(e.dockId)) ? { dockId: str(e.dockId) } : {}),
+        // DELEGATION (additive, #57): the LEAD agentId whose team.dispatch/spawn/resume started this worker run. Set only by
+        // orchestration — parentRunId alone also links overseer reviews and connector continuations, which are not
+        // delegated work. Present only when set, so every other row stays byte-identical.
+        ...(ID_RE.test(str(e.delegatedBy)) ? { delegatedBy: str(e.delegatedBy) } : {}),
+        // PAGE CLOSED (additive, rc-walk #60, 2026-10-13): the page watching this desk run closed or reloaded while the run
+        // was live, so the station cancelled it (the disconnect law). `waitingOn` names, in plain words, the approvals
+        // still open at that moment — the disconnect denied them, so none of them was granted. Set only by the host that
+        // saw its stream close (index.js handleRun); present only on such a run, so every other row stays byte-identical.
+        ...(pageClosedOf(e.pageClosed) ? { pageClosed: pageClosedOf(e.pageClosed) } : {}),
+        // CANCELLED WHILE (additive, #99, 2026-10-18): a cancelled run that was still WAITING on its model (no reply yet, a
+        // silent open stream, a retry backoff) names that wait — a bare `cancelled` read the same for a hung local model
+        // and a busy healthy run. Present only on such a cancelled run, so every other row stays byte-identical.
+        ...(e.reason === 'cancelled' && cancelledWhileOf(e.cancelledWhile) ? { cancelledWhile: cancelledWhileOf(e.cancelledWhile) } : {}),
+        // SEND NOW LEDGER (additive, 0.13.5 live walk 2026-10-14): which of the page's tracked steering notes this run
+        // read (applied) or ended without reading — so GET /api/run/steer still answers a page that lost its memory after
+        // a station restart. Present only on a run that took a tracked note, so every other row stays byte-identical.
+        ...(steerNotesOf(e.steerNotes).length ? { steerNotes: steerNotesOf(e.steerNotes) } : {}),
+        toolTrace: toolTraceList(e.toolTrace),
+        failureStage: str(e.failureStage).trim().slice(0, FAILURE_FIELD_MAX),
+        failureCode: str(e.failureCode).trim().slice(0, FAILURE_FIELD_MAX),
+        uncertainMutations: uncertainMutationList(e.uncertainMutations),
+        completionEvidence: completionEvidence(e.completionEvidence, opts.completionAuthority),
+        recoveryAttempts: recoveryAttemptList(e.recoveryAttempts),
+        startedAt: nonnegative(e.startedAt), endedAt: nonnegative(e.endedAt), durationMs: nonnegative(e.durationMs),
+        ts: num(e.ts) || clock.now()
+      };
+      /* TYPED OUTCOMES (additive, 2026-10-29): the run's outcome code. The one its own agent.run.end carried wins (the host's
+         outcomeOf: that end saw facts this row does not keep, e.g. a provider-cut reply's finishReason); else it is resolved
+         from this row's own facts — the same rule (frontend/app/runoutcome.js). Every reader asks RunOutcome.ofRow. */
+      if (RunOutcome) {
+        let said = null;
+        if (typeof opts.outcomeOf === 'function') { try { said = opts.outcomeOf(entry.runId); } catch (err) { failNote('runstore.outcomeOf', err); said = null; } }
+        if (!(said && RunOutcome.isOutcome(said.outcome))) said = RunOutcome.isOutcome(e.outcome) ? { outcome: e.outcome } : null;
+        const o = RunOutcome.ofRow(Object.assign({}, entry, { finishReason: e.finishReason, outcome: said ? said.outcome : undefined }));
+        entry.outcome = o.outcome;
+        if (!entry.failureCode && said && said.failureCode) entry.failureCode = str(said.failureCode).trim().slice(0, FAILURE_FIELD_MAX);
+      }
+      // Interrupted-run/recovery provenance (additive; set only when present so ordinary rows keep their shape).
+      if (RECOVERY_STATUSES.has(e.recoveryStatus)) entry.recoveryStatus = e.recoveryStatus;
+      const continuedRunId = str(e.continuedRunId).slice(0, 100);
+      if (continuedRunId) entry.continuedRunId = continuedRunId;
+      if (REASONS.has(e.continuedReason)) entry.continuedReason = e.continuedReason;
+      const recoveryOf = str(e.recoveryOf).slice(0, 100);
+      if (recoveryOf) entry.recoveryOf = recoveryOf;
+      // TURN IDENTITY (additive): the identity this row was GIVEN (settleSpend's superseding row is built from the run's
+      // served row, so it carries the run's turn), checked exactly as a note is; then what noteIdentity admitted for this
+      // run, consumed here, never over a field this row already holds. With neither, the row is byte-identical.
+      const givenIdentity = {};
+      for (const k of IDENTITY_KEYS) if (e[k] !== undefined) givenIdentity[k] = e[k];
+      if (Object.keys(givenIdentity).length) {
+        const admitted = {};
+        const dropped = admitIdentity(givenIdentity, admitted);
+        if (dropped) failNote('runstore.noteIdentity', new Error(dropped + ' identity field(s) dropped for run ' + (entry.runId || '?')));
+        for (const k of Object.keys(admitted)) if (!Object.prototype.hasOwnProperty.call(entry, k)) entry[k] = admitted[k];
+      }
+      const identity = entry.runId ? identities.get(entry.runId) : null;
+      if (identity) {
+        identities.delete(entry.runId);
+        for (const k of Object.keys(identity)) if (!Object.prototype.hasOwnProperty.call(entry, k)) entry[k] = identity[k];
+      }
+      // SETTLED SPEND (additive, 2026-10-08): the Commander settled this interrupted run's unknown spend in SETTINGS ›
+      // SPENDING LIMITS, so `usd` is the booked figure and `spendSettled` says how ('entered' | 'limit' | 'recorded' |
+      // 'assumed' — mirrors the ledger's attestedAs). A settlement is a fact about money; a later recovery-status update for the same run is
+      // not, so it inherits the settlement instead of re-opening the spend as unknown.
+      const prior = (e.reason === 'interrupted' && entry.runId) ? chains.get(entry.runId) : null;
+      const settledAs = SETTLED_AS.has(e.spendSettled) ? e.spendSettled
+        : (prior && prior.latest && SETTLED_AS.has(prior.latest.spendSettled) ? prior.latest.spendSettled : '');
+      if (settledAs) {
+        entry.spendSettled = settledAs;
+        if (!SETTLED_AS.has(e.spendSettled)) entry.usd = num(prior.latest.usd);
+      } else if (e.spendUnknown === true) entry.spendUnknown = true;
+      // ROUTINE HISTORY (additive, 2026-10-01): the scheduled routine this run fired for, so a routine's past runs are
+      // one filter away (GET /api/cron/history). Present only on scheduled runs; every other row stays byte-identical.
+      const cronJobId = str(e.cronJobId).slice(0, 100);
+      if (cronJobId) entry.cronJobId = cronJobId;
+      // untrusted-content taint the run ended with (additive; absent on a clean run) — sec-taint 09-25
+      const taintedBy = str(e.taintedBy).replace(/\s+/g, ' ').trim().slice(0, 200);
+      if (taintedBy) entry.taintedBy = taintedBy;
+      // ROW STAMP (additive, attachment-rows-and-taint repair 2026-11-04): taintedBy is the FIRST source the run latched, which may be the
+      // bare attachment stamp (decays on replay) even when the run then read a page or the saved file. The stamp that rows written FOR
+      // this run after it ended must carry (a dispatched worker's accepted answer: dispatch-delivery.js) is the first source that is NOT
+      // the bare attachment (run-execution-state rowTaint). Present only when it differs from taintedBy, so every other row stays byte-identical.
+      const rowTaintedBy = str(e.rowTaintedBy).replace(/\s+/g, ' ').trim().slice(0, 200);
+      if (rowTaintedBy && rowTaintedBy !== taintedBy) entry.rowTaintedBy = rowTaintedBy;
+      // WORDLESS (additive, same repair): the run's directive carried files and no typed words, so its title is the label of the files,
+      // a third party's names. Present only when true; the ambient "worked recently" projection (index.js nightshiftRecentRuns) leaves such a run out.
+      if (e.wordless === true) entry.wordless = true;
+      const error = str(e.error).replace(/\s+/g, ' ').trim().slice(0, ERROR_MAX);
+      if (error) entry.error = error;
+      rows.push(entry);
+      // bound the RAM mirror: splice the oldest off past the ceiling. Disk keeps the full append-only log; only
+      // this in-process array is capped so a long-lived process doesn't leak. The cap is well above every served
+      // query horizon (≤1000), so no list()/insights query is ever short-changed within the window it reads.
+      if (rows.length > ramMax) { rows.splice(0, rows.length - ramMax); reindex(); }
+      else track(entry);
+      try { io.append(entry, entry.dispatchDelivery ? { strict: true } : undefined); }
+      catch (e) { if (entry.dispatchDelivery) unpersisted.add(entry.runId); failNote('runstore.append', e); }
+      return entry;
+    }
+
+    function list(agentId, o) {
+      o = o || {};
+      const limit = num(o.limit) > 0 ? num(o.limit) : cap;
+      const want = agentId == null ? null : str(agentId);
+      const beforeRunId = o.beforeRunId == null ? '' : str(o.beforeRunId);
+      const since = num(o.since);
+      const through = num(o.through);
+      // one workstream's rows (a trigger fire / a sample reads back ITS runs — never the station's global newest N)
+      const wantStream = o.streamId == null ? null : str(o.streamId);
+      const out = [];
+      let afterCursor = !beforeRunId;
+      for (let i = rows.length - 1; i >= 0 && out.length < limit; i--) {   // newest-first
+        const raw = rows[i];
+        if (updates.has(raw)) continue;   // served through its chain's first row, never on its own
+        if (!afterCursor) {
+          if (raw.runId === beforeRunId) afterCursor = true;
+          continue;
+        }
+        const row = view(raw);
+        if (want != null && row.agentId !== want) continue;
+        if (wantStream != null && str(row.streamId) !== wantStream) continue;
+        if (since > 0 && num(row.ts) <= since) continue;
+        if (through > 0 && num(row.ts) > through) continue;
+        out.push(row);
+      }
+      return out;
+    }
+
+    // The one served row for a runId (collapsed chain view), or null.
+    function latest(runId) {
+      const id = str(runId);
+      if (!id) return null;
+      const c = chains.get(id);
+      if (c) return view(c.first);
+      for (let i = rows.length - 1; i >= 0; i--) if (rows[i].runId === id && !updates.has(rows[i])) return view(rows[i]);
+      return null;
+    }
+
+    // Append a final dispatch envelope without adding a second execution/spend row. Only the host-created
+    // pending original is eligible; an internal repair or missing run can never become a new execution here.
+    // Persist first: a failed append leaves the provisional state honest and can be retried safely.
+    function deliverySource(runId) {
+      const row = latest(runId);
+      if (!row || !row.dispatchDelivery || row.dispatchDelivery.state === 'internal') return null;
+      if (unpersisted.has(row.runId)) throw new Error('The original dispatch run was not durably recorded.');
+      return row;
+    }
+    function finalizeDelivery(runId, value) {
+      const row = deliverySource(runId), envelope = dispatchDelivery(Object.assign({}, value, { state: 'final' }));
+      if (!row) return null;
+      if (row.dispatchDelivery.state === 'final') return row;
+      const patch = { kind: DELIVERY_PATCH_KIND, runId: row.runId, dispatchDelivery: envelope, ts: clock.now() };
+      io.append(patch, { strict: true });
+      rows.push(patch);
+      if (rows.length > ramMax) { rows.splice(0, rows.length - ramMax); reindex(); }
+      else track(patch);
+      return latest(runId);
+    }
+
+    /* settleSpend(runId, usd, how) — the Commander settled an interrupted run's unknown spend (POST /api/budget/settle,
+       after the ledger booked it). Appends ONE superseding row for the run's interrupted chain carrying the booked
+       figure, so INSIGHTS and the run row stop calling it spend-unknown; every other field is the run's served row.
+       Only a served interrupted row whose spend is still unknown qualifies (null otherwise): a settled run is never
+       settled twice and an ordinary run's history is never rewritten. */
+    function settleSpend(runId, usd, how) {
+      const row = latest(runId);
+      if (!row || row.reason !== 'interrupted' || row.spendUnknown !== true || !SETTLED_AS.has(how)) return null;
+      if (typeof usd !== 'number' || !isFinite(usd) || usd < 0) return null;
+      const next = Object.assign({}, row, { usd, spendSettled: how });
+      delete next.spendUnknown; delete next.ts;   // ts: this update's own time (reads serve the chain's first ts)
+      return record(next);
+    }
+
+    return {
+      record, list, latest, settleSpend, finalizeDelivery, deliverySource, noteIdentity,
+      all() { return rows.filter(r => !updates.has(r)).map(view); },
+      count() { return rows.length - updates.size; }
+    };
+  }
+
+  return { makeRunStore, DELIVERY_TEXT_MAX };
+});
