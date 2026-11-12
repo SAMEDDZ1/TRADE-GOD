@@ -118,11 +118,30 @@ try {
   A.ok(tv.ticket.lots > 0 && tv.ticket.risk.ok, 'a tight-stop alert is sized down to fit the leverage rules instead of being vetoed');
   A.ok(/leverage limits/.test(tv.ticket.sizingNote || ''), 'and the ticket says its size was cut: ' + tv.ticket.sizingNote);
 
+  // ---- event blackouts ----
+  {
+    const iso = ms => new Date(ms).toISOString();
+    A.eq(svc.addBlackout({ label: 'US CPI', start: iso(clock + 3600000), end: iso(clock) }, 'macro-1').ok, false, 'a blackout must end after it starts');
+    A.eq(svc.addBlackout({ label: '', start: iso(clock), end: iso(clock + 60000) }, 'macro-1').ok, false, 'a blackout needs a name');
+    A.eq(svc.addBlackout({ label: 'x', start: iso(clock), end: iso(clock + 8 * 86400000) }, 'macro-1').ok, false, 'at most 7 days');
+    const b = svc.addBlackout({ label: 'US CPI', start: iso(clock - 60000), end: iso(clock + 30 * 60000), assetClasses: ['metals', 'forex'] }, 'researcher-1');
+    A.eq([b.ok, b.blackout.by], [true, 'researcher-1'], 'a crew member can add a blackout (it only tightens)');
+    svc.setSettings({ autonomy: 'approve-all' });
+    const blocked = svc.propose({ source: 'human', symbol: 'XAUUSD', side: 'buy', stop: 2600 });
+    A.ok(blocked.status === 'rejected' && /Event blackout: US CPI/.test(blocked.note), 'gold is blocked during the CPI blackout: ' + blocked.note);
+    const free = svc.propose({ source: 'human', symbol: 'BTCUSD', side: 'buy', stop: 1 });
+    A.ok(!/blackout/.test(free.note), 'a class outside the blackout is not blocked by it');
+    A.eq(svc.snapshot().blackouts.length, 1, 'the desk lists the active blackout');
+    A.eq(svc.removeBlackout(b.blackout.id, 'researcher-1').ok, false, 'only the Commander can lift a blackout');
+    A.eq(svc.removeBlackout(b.blackout.id, 'commander').ok, true, 'the Commander lifts it');
+    A.eq(svc.snapshot().blackouts.length, 0, 'gone');
+  }
+
   // ---- persistence: a restart keeps everything ----
   const before = svc.snapshot();
   svc = mk();
   const after = svc.snapshot();
-  A.eq([after.account.balance, after.positions.length, after.tickets.length, after.settings.autonomy, after.halted.on], [before.account.balance, before.positions.length, before.tickets.length, 'earned', false], 'a restart restores the account, tickets and settings');
+  A.eq([after.account.balance, after.positions.length, after.tickets.length, after.settings.autonomy, after.halted.on], [before.account.balance, before.positions.length, before.tickets.length, 'approve-all', false], 'a restart restores the account, tickets and settings');
   A.eq(svc.scorecards().agents.fx.status.level, 'benched', 'and the Coach\'s decisions');
   A.eq(svc.verifyJournal().ok, true, 'the journal chain is intact across the restart');
   A.ok(svc.journal().length > 20, 'every step was journalled (' + svc.journal().length + ' entries)');

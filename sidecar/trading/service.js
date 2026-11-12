@@ -63,6 +63,10 @@ function createService(deps) {
   let halted = Object.assign({ on: false, reason: '', at: 0, by: '' }, readJson('halt.json', {}));
   let tickets = readJson('tickets.json', []); if (!Array.isArray(tickets)) tickets = [];
   let agents = readJson('agents.json', {}); if (!agents || typeof agents !== 'object') agents = {};
+  // EVENT BLACKOUTS: windows around high-impact news (CPI, central banks, jobs) when no new position may open.
+  // Anyone may ADD one (it only tightens); only the Commander may remove one.
+  let blackouts = readJson('blackouts.json', []); if (!Array.isArray(blackouts)) blackouts = [];
+  let blackoutSeq = blackouts.reduce((m, b) => Math.max(m, Number(String(b.id).slice(1)) || 0), 0);
   let seenAlerts = [];                                                  // recent TradingView dedupe keys (memory only)
   let ticketSeq = tickets.reduce((m, t) => Math.max(m, Number(String(t.id).slice(1)) || 0), 0);
   const paper = Paper.create({ state: readJson('paper.json', null), startingBalance: settings.paperStartingBalance });
@@ -105,7 +109,8 @@ function createService(deps) {
       policy, halted, settings: publicSettings(),
       tickets: tickets.slice(-60).reverse(),
       pending: tickets.filter(t => t.status === 'awaiting-approval' || t.status === 'awaiting-council').reverse(),
-      brokers: Brokers.catalog(settings.country, settings.region)
+      brokers: Brokers.catalog(settings.country, settings.region),
+      blackouts: blackouts.filter(b => b.end > now()).sort((a, b) => a.start - b.start)
     };
   }
 
@@ -132,6 +137,36 @@ function createService(deps) {
     rec.status.ruleBreaks = (Number(rec.status.ruleBreaks) || 0) + 1;
     log('coach.rule-break', { agentId, codes });
     coachUpdate(agentId);
+  }
+
+  function activeBlackout(symbol, at) {
+    const inst = I.get(symbol);
+    return blackouts.find(b => at >= b.start && at < b.end && (!b.assetClasses.length || (inst && b.assetClasses.indexOf(inst.assetClass) >= 0))
+      && (!b.symbols.length || b.symbols.indexOf(I.normalize(symbol)) >= 0)) || null;
+  }
+  function addBlackout(req, by) {
+    const r = req || {};
+    const start = Number(new Date(r.start).getTime()), end = Number(new Date(r.end).getTime());
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return { ok: false, error: 'start and end must be dates' };
+    if (!(end > start)) return { ok: false, error: 'the blackout must end after it starts' };
+    if (end - start > 7 * 86400000) return { ok: false, error: 'a blackout is at most 7 days' };
+    if (end < now()) return { ok: false, error: 'that window is already over' };
+    const label = String(r.label || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 80);
+    if (!label) return { ok: false, error: 'name the event (e.g. "US CPI")' };
+    const assetClasses = (Array.isArray(r.assetClasses) ? r.assetClasses : []).filter(c => I.CLASSES.indexOf(c) >= 0);
+    const symbols = (Array.isArray(r.symbols) ? r.symbols : []).map(I.normalize).filter(Boolean);
+    const b = { id: 'B' + (++blackoutSeq), label, start, end, assetClasses, symbols, by: String(by || 'commander').slice(0, 60), at: now() };
+    blackouts.push(b);
+    blackouts = blackouts.filter(x => x.end > now() - 86400000).slice(-200);
+    save('blackouts.json', blackouts); log('blackout.added', b);
+    return { ok: true, blackout: b };
+  }
+  function removeBlackout(id, by) {
+    if (by !== 'commander') return { ok: false, error: 'only the Commander can lift a blackout' };
+    const b = blackouts.find(x => x.id === id);
+    if (!b) return { ok: false, error: 'no such blackout' };
+    blackouts = blackouts.filter(x => x.id !== id); save('blackouts.json', blackouts); log('blackout.removed', { id, label: b.label });
+    return { ok: true };
   }
 
   // ---------------- the pipeline ----------------
@@ -180,6 +215,8 @@ function createService(deps) {
     if (t.source === 'agent' && !eff.canPropose) return settle(t, 'rejected', 'This crew member is benched and cannot propose trades.');
     if (t.source === 'agent' && !t.agentId) return settle(t, 'rejected', 'A proposal must say which crew member it comes from.');
     if (halted.on) return settle(t, 'rejected', 'The kill switch is ON.');
+    const bo = activeBlackout(t.symbol, now());
+    if (bo) return settle(t, 'rejected', 'Event blackout: ' + bo.label + ' — no new positions on ' + t.symbol + ' until ' + new Date(bo.end).toISOString().slice(0, 16).replace('T', ' ') + ' UTC.');
 
     t.entry = t.orderType === 'market' ? marketEntry(t.symbol, t.side) : Number(r.entry);
     if (!(t.entry > 0)) return settle(t, 'failed', t.orderType === 'market' ? 'No price for ' + t.symbol + ' yet.' : 'A pending order needs an entry price.');
@@ -243,6 +280,8 @@ function createService(deps) {
   // EXECUTE: the risk engine is asked again with the prices of THIS moment, then the paper broker fills it.
   function execute(t) {
     if (halted.on) return settle(t, 'rejected', 'The kill switch is ON.');
+    const bo = activeBlackout(t.symbol, now());
+    if (bo) return settle(t, 'rejected', 'Event blackout started before it could fill: ' + bo.label + '.');
     if (t.orderType === 'market') {
       const px = marketEntry(t.symbol, t.side);
       if (!(px > 0)) return settle(t, 'failed', 'No price for ' + t.symbol + '.');
@@ -398,6 +437,7 @@ function createService(deps) {
     tick, ticks,
     // controls
     halt, resume, setPolicy, setSettings, closePosition, cancelOrder, modifyPosition, coachCommand, resetPaper,
+    addBlackout, removeBlackout, activeBlackout,
     tradingViewAlert, tvTemplate: () => TV.template(settings.tvSecret ? '(your secret)' : 'YOUR-SECRET'),
     onEvent: fn => { listeners.push(fn); },
     _paper: paper

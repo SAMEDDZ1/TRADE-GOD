@@ -91,6 +91,7 @@
     const halted = st.halted && st.halted.on;
     el.innerHTML = '<div class="tg-feed ' + (f.simulated ? 'sim' : 'real') + '" title="' + esc(f.label + (f.error ? ' — ' + f.error : '')) + '">' + (f.simulated ? 'SIMULATED PRICES' : 'LIVE · ' + esc(f.kind.toUpperCase()) + ' ' + esc(f.env || '')) + '</div>'
       + '<div class="tg-venue">PAPER ACCOUNT</div>'
+      + ((st.blackouts || []).some(b => b.start <= st.now && b.end > st.now) ? '<div class="tg-feed sim" title="No new positions on the affected desks">BLACKOUT: ' + esc(st.blackouts.filter(b => b.start <= st.now && b.end > st.now).map(b => b.label).join(', ')) + '</div>' : '')
       + '<div class="tg-kpi"><small>EQUITY</small><b>' + money(a.equity, a.accountCcy) + '</b></div>'
       + '<div class="tg-kpi"><small>BALANCE</small><b>' + money(a.balance) + '</b></div>'
       + '<div class="tg-kpi"><small>TODAY</small><b class="' + tone(a.dayPnl) + '">' + signed(a.dayPnl) + '</b></div>'
@@ -366,6 +367,13 @@
       + '<p class="dim">A stop-loss is required on every trade and that cannot be switched off. Lowering a limit is always allowed; raising one asks you to type <b>I ACCEPT MORE RISK</b>.</p>'
       + '<button class="tg-btn" data-act="savepolicy">SAVE LIMITS</button></div>'
 
+      + '<div class="tg-card"><div class="tg-cardhd"><b>EVENT BLACKOUTS</b> <span class="dim">no new positions during high-impact news</span></div>'
+      + ((st.blackouts || []).length ? '<table class="tg-tbl"><tr><th>EVENT</th><th>FROM</th><th>TO</th><th>AFFECTS</th><th>BY</th><th></th></tr>' + st.blackouts.map(b => '<tr><td>' + esc(b.label) + '</td><td>' + time(b.start) + '</td><td>' + time(b.end) + '</td><td>'
+        + esc(b.symbols.concat(b.assetClasses).join(', ') || 'everything') + '</td><td class="dim">' + esc(b.by) + '</td><td><button class="tg-mini" data-act="lift" data-id="' + esc(b.id) + '">LIFT</button></td></tr>').join('') + '</table>' : '<p class="dim">None scheduled. The News Scout can add them from the economic calendar.</p>')
+      + '<form data-slot="blackout"><label>Event <input name="label" placeholder="US CPI"></label><label>From <input name="start" type="datetime-local"></label><label>To <input name="end" type="datetime-local"></label>'
+      + '<label>Only these desks (none = all) <select name="assetClasses" multiple size="3">' + ['metals', 'forex', 'indices', 'equities', 'crypto', 'energy'].map(c => '<option>' + c + '</option>').join('') + '</select></label>'
+      + '<button type="button" class="tg-btn" data-act="addblackout">ADD BLACKOUT</button></form></div>'
+
       + '<div class="tg-card"><div class="tg-cardhd"><b>WATCHLIST</b></div><label>Symbols (comma separated) <input data-set="watchlist" value="' + esc(s.watchlist.join(', ')) + '"></label></div>'
 
       + '<div class="tg-card tg-wide"><div class="tg-cardhd"><b>BROKERS</b></div><table class="tg-tbl"><tr><th>BROKER</th><th>MARKETS</th><th>STATUS</th><th></th></tr>'
@@ -453,6 +461,14 @@
           r = await post('/api/trading/policy', { patch, confirm: typed.trim() });
         }
         say(r.ok ? 'Risk limits saved.' : (r.error + ': ' + (r.rejected || []).map(x => x.field + ' — ' + x.reason).join('; ')), r.ok ? 'ok' : 'bad');
+      } else if (act === 'addblackout') {
+        const f = slot('blackout'), v = formVals(f);
+        const classes = Array.from(f.querySelector('select[name="assetClasses"]').selectedOptions).map(o => o.value);
+        r = await post('/api/trading/blackout', { label: v.label, start: v.start ? new Date(v.start).toISOString() : '', end: v.end ? new Date(v.end).toISOString() : '', assetClasses: classes });
+        say(r.ok ? 'Blackout added: ' + r.blackout.label + '.' : r.error, r.ok ? 'ok' : 'bad');
+      } else if (act === 'lift') {
+        if (!confirm('Lift this blackout? New positions will be allowed during the event.')) return;
+        r = await post('/api/trading/blackout/remove', { id }); say(r.ok ? 'Blackout lifted.' : r.error, r.ok ? 'ok' : 'bad');
       } else if (act === 'oanda') {
         const v = formVals(slot('oanda'));
         say('Connecting to OANDA practice…', '');
@@ -470,7 +486,7 @@
       }
     } catch (err) { say(String(err && err.message || err), 'bad'); }
     await refresh();
-    if (['savepolicy', 'oanda', 'oandaoff', 'tvsecret', 'reset'].indexOf(act) >= 0 && S.tab === 'setup') paneSetup(slot('pane'));
+    if (['savepolicy', 'oanda', 'oandaoff', 'tvsecret', 'reset', 'addblackout', 'lift'].indexOf(act) >= 0 && S.tab === 'setup') paneSetup(slot('pane'));
     if (S.tab === 'approvals') paneApprovals(slot('pane'));
   }
   async function onChange(e) {

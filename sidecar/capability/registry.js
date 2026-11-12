@@ -74,6 +74,7 @@
       { capId: 'trading', tool: 'trading.propose', scope: 'write', requiresConsent: false, network: false },
       { capId: 'trading', tool: 'trading.argue', scope: 'write', requiresConsent: false, network: false },
       { capId: 'trading', tool: 'trading.backtest', scope: 'read', requiresConsent: false, network: false, deferred: true },
+      { capId: 'trading', tool: 'trading.blackout', scope: 'write', requiresConsent: false, network: false, deferred: true },
       // Host-scoped scheduled scratchpad: the computer is present on every runnable station, while the tool
       // itself refuses any run without a host-minted cronJobId. This does not grant general notebook access.
       { capId: 'routinescratch', tool: 'routine.notepad', scope: 'write', requiresConsent: false, network: false },

@@ -168,7 +168,23 @@ function makeTradingTools(deps) {
     }
   };
 
-  const tools = [market, deskTool, propose, argue, backtest];
+  const blackout = {
+    name: 'trading.blackout', capability: 'trading', impact: 'none', scope: 'write', requiresConsent: false, timeoutMs: 10000,
+    description: 'Add an EVENT BLACKOUT: no new positions open during a high-impact event (US CPI, a central bank decision, '
+      + 'jobs data, OPEC). Give the event name, start and end (ISO times, UTC) and optionally the asset classes or symbols '
+      + 'it affects (none = everything). A blackout only ever tightens; only the Commander can lift one. Check the time '
+      + 'from a reliable calendar first — never guess an event time.',
+    schema: { type: 'object', required: ['label', 'start', 'end'], properties: {
+      label: { type: 'string' }, start: { type: 'string', description: 'ISO time, e.g. 2026-11-13T13:15:00Z' }, end: { type: 'string' },
+      assetClasses: { type: 'array', items: { type: 'string', enum: I.CLASSES } }, symbols: { type: 'array', items: { type: 'string' } } } },
+    run: async (args) => {
+      if (!desk) return unavailable;
+      const r = desk.service.addBlackout(args || {}, agentId || 'agent');
+      return r.ok ? { content: 'Blackout ' + r.blackout.id + ' set: ' + r.blackout.label + ' from ' + new Date(r.blackout.start).toISOString() + ' to ' + new Date(r.blackout.end).toISOString() + '.', summary: 'blackout ' + r.blackout.label }
+        : { content: 'REFUSED: ' + r.error, summary: 'refused' };
+    }
+  };
+  const tools = [market, deskTool, propose, argue, backtest, blackout];
   return { tools, register(reg) { for (const t of tools) reg.register(t); return reg; } };
 }
 

@@ -82,3 +82,4 @@
 .tg-steps code { font-size: 11px; }
 .tg-setup .tg-wide { grid-column: 1 / -1; }
 .tg-floor { width: 100%; display: block; border: 1px solid var(--tg-line); image-rendering: pixelated; cursor: default; }
+.tg label.tg-chk { display: block !important; } .tg label.tg-chk input { margin-right: 6px; vertical-align: middle; }

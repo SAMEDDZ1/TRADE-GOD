@@ -202,6 +202,8 @@ function makeTradingRoutes(deps) {
       const r = svc.modifyPosition(String(b.id || ''), patch); r.ok ? ok(res, { position: r.position }) : bad(res, 409, r.error);
     }) },
     { m: 'POST', exact: '/api/trading/order/cancel', h: guard(async (req, res) => { const b = await body(req); const r = svc.cancelOrder(String(b.id || '')); r.ok ? ok(res, {}) : bad(res, 409, r.error); }) },
+    { m: 'POST', exact: '/api/trading/blackout', h: guard(async (req, res) => { const b = await body(req); const r = svc.addBlackout(b, 'commander'); r.ok ? ok(res, r) : bad(res, 400, r.error); }) },
+    { m: 'POST', exact: '/api/trading/blackout/remove', h: guard(async (req, res) => { const b = await body(req); const r = svc.removeBlackout(String(b.id || ''), 'commander'); r.ok ? ok(res, {}) : bad(res, 409, r.error); }) },
     { m: 'POST', exact: '/api/trading/coach', h: guard(async (req, res) => { const b = await body(req); const r = svc.coachCommand(b.agentId, b.action, b.level); r.ok ? ok(res, r) : bad(res, 400, r.error); }) },
     { m: 'POST', exact: '/api/trading/paper/reset', h: guard(async (req, res) => {
       const b = await body(req);

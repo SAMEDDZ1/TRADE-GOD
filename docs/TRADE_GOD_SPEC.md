@@ -71,6 +71,11 @@ starter tasks, gear, skills, suggested AI platform and a pixel seal. Tests: `cla
 `trading.market`, `trading.desk`, `trading.propose`, `trading.argue`, `trading.backtest`
 (`sidecar/tools/builtin/trading.js`), granted to every agent; the proposer is always the run's own agent.
 
+### Event blackouts — done
+No new positions on the affected desks during a high-impact event (CPI, central banks, jobs, OPEC). The Commander
+(SETUP) or the News Scout (`trading.blackout`) adds them; only the Commander lifts one. Live calendar feeds are planned —
+the News Scout reads the calendar from the web today.
+
 ### Phone — done
 Owner-only chat commands `/trades`, `/approve <ticket>`, `/reject <ticket>`, `/halt` on every paired channel (Telegram,
 Discord, Slack, Matrix, Signal), behind the existing owner gate. Pings to the paired Telegram owner when a ticket needs
@@ -87,7 +92,6 @@ launch. `npm run preview:trading` runs it without the rest of the app.
 | Station world art | **partial** | The trading floor is new art. The original StarNet station view (Build Mode, rooms, props) still runs on StarNet's engine and its procedural sprites; its image assets were removed. Replacing that engine's art set is a project of its own. |
 | Live OANDA orders | planned | Behind an explicit switch, after paper results justify it. |
 | IBKR, Alpaca, tastytrade, Coinbase, Kraken connectors | planned | Adapter shape = `oanda.js`; crypto via ccxt. |
-| Economic-calendar auto-pause | planned | Block new positions around top-tier events. |
 | Pine Script → strategy | planned | |
 | Agent-name mapping on CREW scores | planned | Scores are keyed by agent id. |
 | Rust execution core | planned | Only needed for latency-sensitive strategies. |
