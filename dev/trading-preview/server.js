@@ -18,12 +18,13 @@ const readBody = (req, max) => new Promise((resolve, reject) => {
   req.on('data', c => { n += c.length; if (n > max) { reject(Object.assign(new Error('body too large'), { tooLarge: true })); req.destroy(); } else chunks.push(c); });
   req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8'))); req.on('error', reject);
 });
-const desk = makeTradingRoutes({ fs, path, dir: DIR, readBody, respondJson, fetch: (...a) => fetch(...a), log: l => console.log(l) });
+const desk = makeTradingRoutes({ fs, path, dir: DIR, readBody, respondJson, fetch: (...a) => fetch(...a), now: () => Date.now(), log: l => console.log(l) });
 const FILES = {
   '/app/tradingchart.js': 'frontend/app/tradingchart.js', '/app/tradingfloor.js': 'frontend/app/tradingfloor.js', '/app/windows/trading.js': 'frontend/app/windows/trading.js',
-  '/css/trading.css': 'frontend/css/trading.css', '/shared/specialties.js': 'shared/specialties.js', '/icon.png': 'src-tauri/icons/128x128.png'
+  '/css/trading.css': 'frontend/css/trading.css', '/shared/specialties.js': 'shared/specialties.js', '/icon.png': 'src-tauri/icons/128x128.png',
+  '/assets/fonts/vt323.woff2': 'frontend/assets/fonts/vt323.woff2'
 };
-const TYPES = { '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.html': 'text/html' };
+const TYPES = { '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.html': 'text/html', '.woff2': 'font/woff2' };
 const server = http.createServer(async (req, res) => {
   const p = String(req.url).split('?')[0];
   const route = desk.routes.find(r => r.m === req.method && (r.exact === p || r.qsplit === p));

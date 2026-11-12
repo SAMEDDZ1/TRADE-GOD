@@ -67,6 +67,35 @@
   }
 
   // ------------------------------------------------------------------ shell
+  /* the desk's own dialog (never the OS's confirm/prompt over the terminal): resolves true / the typed text, or
+     null when cancelled. Enter confirms, Escape cancels; one at a time. */
+  function ask(message, opts) {
+    opts = opts || {};
+    const host = S.body; if (!host) return Promise.resolve(null);
+    const old = host.querySelector('.tg-ask'); if (old) old.remove();
+    return new Promise(resolve => {
+      const box = document.createElement('div');
+      box.className = 'tg-ask';
+      box.innerHTML = '<div class="tg-ask-card' + (opts.danger ? ' danger' : '') + '" role="dialog" aria-modal="true">' +
+        '<div class="tg-ask-msg">' + esc(message) + '</div>' +
+        (opts.input ? '<input class="tg-ask-in" type="text" autocomplete="off" spellcheck="false" placeholder="' + esc(opts.placeholder || '') + '">' : '') +
+        '<div class="tg-ask-row"><button class="tg-btn" data-ask="no">CANCEL</button><button class="tg-btn ' + (opts.danger ? 'tg-ask-danger' : 'tg-go') + '" data-ask="yes">' + esc(opts.okLabel || 'OK') + '</button></div></div>';
+      const input = box.querySelector('.tg-ask-in');
+      const done = v => { box.remove(); resolve(v); };
+      box.addEventListener('click', e => {
+        const b = e.target.closest('[data-ask]');
+        if (b) done(b.dataset.ask === 'yes' ? (input ? input.value : true) : null);
+        else if (e.target === box) done(null);
+      });
+      box.addEventListener('keydown', e => {
+        if (e.key === 'Escape') { e.preventDefault(); done(null); }
+        else if (e.key === 'Enter') { e.preventDefault(); done(input ? input.value : true); }
+      });
+      host.appendChild(box);
+      (input || box.querySelector('[data-ask="yes"]')).focus();
+    });
+  }
+
   function stopDesk() {
     if (S.timer) { clearInterval(S.timer); S.timer = null; }
     if (S.chart) { S.chart.destroy(); S.chart = null; }
@@ -413,11 +442,11 @@
     let r = null;
     try {
       if (act === 'halt') {
-        if (!confirm('KILL SWITCH: close every position, cancel every order and block new trades?')) return;
+        if (!(await ask('KILL SWITCH: close every position, cancel every order and block new trades?', { danger: true, okLabel: 'KILL SWITCH' }))) return;
         r = await post('/api/trading/halt', { reason: 'kill switch pressed' });
         if (r.ok) say('Kill switch ON — ' + r.result.closed + ' position(s) closed, ' + r.result.cancelled + ' order(s) cancelled.' + (r.result.stuck.length ? ' COULD NOT CLOSE: ' + r.result.stuck.map(s => s.symbol).join(', ') : ''), r.result.stuck.length ? 'bad' : 'ok');
       } else if (act === 'resume') {
-        const typed = prompt('Type RESUME to allow trading again.'); if (typed == null) return;
+        const typed = await ask('Type RESUME to allow trading again.', { input: true, placeholder: 'RESUME', okLabel: 'RESUME' }); if (typed == null) return;
         r = await post('/api/trading/resume', { confirm: typed.trim() }); say(r.ok ? 'Trading resumed.' : r.error, r.ok ? 'ok' : 'bad');
       } else if (act === 'place') {
         const v = formVals(slot('ticket'));
@@ -427,7 +456,7 @@
       } else if (act === 'close') {
         r = await post('/api/trading/position/close', { id }); say(r.ok ? 'Closed: ' + signed(r.trade.pnl) : r.error, r.ok ? 'ok' : 'bad');
       } else if (act === 'movestop') {
-        const v = prompt('New stop-loss price (it can be moved, never removed):'); if (v == null || v === '') return;
+        const v = await ask('New stop-loss price (it can be moved, never removed):', { input: true, okLabel: 'MOVE STOP' }); if (v == null || v === '') return;
         r = await post('/api/trading/position/modify', { id, stop: Number(v) }); say(r.ok ? 'Stop moved.' : r.error, r.ok ? 'ok' : 'bad');
       } else if (act === 'cancel') {
         r = await post('/api/trading/order/cancel', { id }); say(r.ok ? 'Order cancelled.' : r.error, r.ok ? 'ok' : 'bad');
@@ -463,7 +492,7 @@
         const patch = {}; S.body.querySelectorAll('[data-pol]').forEach(i => { patch[i.dataset.pol] = Number(i.value); });
         r = await post('/api/trading/policy', { patch });
         if (!r.ok && r.needsConfirm) {
-          const typed = prompt('You are RAISING a risk limit. Type I ACCEPT MORE RISK to confirm.');
+          const typed = await ask('You are RAISING a risk limit. Type I ACCEPT MORE RISK to confirm.', { input: true, danger: true, placeholder: 'I ACCEPT MORE RISK', okLabel: 'RAISE LIMIT' });
           if (typed == null) { say('Limits unchanged.', ''); return; }
           r = await post('/api/trading/policy', { patch, confirm: typed.trim() });
         }
@@ -474,7 +503,7 @@
         r = await post('/api/trading/blackout', { label: v.label, start: v.start ? new Date(v.start).toISOString() : '', end: v.end ? new Date(v.end).toISOString() : '', assetClasses: classes });
         say(r.ok ? 'Blackout added: ' + r.blackout.label + '.' : r.error, r.ok ? 'ok' : 'bad');
       } else if (act === 'lift') {
-        if (!confirm('Lift this blackout? New positions will be allowed during the event.')) return;
+        if (!(await ask('Lift this blackout? New positions will be allowed during the event.', { okLabel: 'LIFT' }))) return;
         r = await post('/api/trading/blackout/remove', { id }); say(r.ok ? 'Blackout lifted.' : r.error, r.ok ? 'ok' : 'bad');
       } else if (act === 'oanda') {
         const v = formVals(slot('oanda'));
@@ -487,7 +516,7 @@
         const v = slot('tvsecret').value;
         r = await post('/api/trading/settings', { patch: { tvSecret: v } }); say(r.ok ? 'Webhook secret saved.' : r.error, r.ok ? 'ok' : 'bad');
       } else if (act === 'reset') {
-        const typed = prompt('Type RESET to wipe the paper account back to a fresh balance.'); if (typed == null) return;
+        const typed = await ask('Type RESET to wipe the paper account back to a fresh balance.', { input: true, danger: true, placeholder: 'RESET', okLabel: 'RESET' }); if (typed == null) return;
         r = await post('/api/trading/paper/reset', { confirm: typed.trim(), startingBalance: Number(slot('resetbal').value) });
         say(r.ok ? 'Paper account reset.' : r.error, r.ok ? 'ok' : 'bad');
       }

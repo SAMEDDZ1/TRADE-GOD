@@ -41,6 +41,7 @@
     commander:    'you — the person who directs the station, grants authority, and judges its work.',
     work:         'MY WORK, AUTOMATE and QUESTS — your jobs, the work that runs on its own, and your progress.',
     build:        'the dock for shaping the station (BUILD MODE), connecting tools and messaging apps (CONNECT), and new apps.',
+    trade:        'the trading desk — live chart and order ticket, trades waiting for your approval, every bot\'s scorecard and Coach level, backtests, the hash-chained journal, and the kill switch.',
     system:       'the dock for the manual, settings, updates, and notifications. Agent history and restore points live in each agent’s Record tab.',
     workstream:   'the saved conversation behind a COMMS session (one row under SESSIONS); planned task conversations also appear as cards on MY WORK › TASKS.',
     orchestrator: 'the lead agent you talk to first — new agents inherit its model unless you pick another.',

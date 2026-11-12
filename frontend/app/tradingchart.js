@@ -28,7 +28,7 @@
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.fillStyle = COL.bg; ctx.fillRect(0, 0, W, H);
       const cs = data.candles || [];
-      if (!cs.length) { ctx.fillStyle = COL.axis; ctx.font = '12px monospace'; ctx.fillText('No price data yet', 12, 20); return; }
+      if (!cs.length) { ctx.fillStyle = COL.axis; ctx.font = "16px 'VT323','Courier New',monospace"; ctx.fillText('No price data yet', 12, 20); return; }
       const plotW = W - PAD_R, plotH = H - PAD_B - PAD_T;
       const slot = Math.max(3, Math.min(14, plotW / cs.length));
       const n = Math.min(cs.length, Math.floor(plotW / slot));
@@ -40,7 +40,7 @@
       const y = p => PAD_T + (hi - p) / (hi - lo) * plotH;
       const x = i => (i + 0.5) * slot;
       // grid + price axis
-      ctx.font = '11px monospace'; ctx.textBaseline = 'middle';
+      ctx.font = "15px 'VT323','Courier New',monospace"; ctx.textBaseline = 'middle';
       for (let g = 0; g <= 5; g++) {
         const p = lo + (hi - lo) * g / 5, yy = Math.round(y(p)) + 0.5;
         ctx.strokeStyle = COL.grid; ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(plotW, yy); ctx.stroke();
@@ -85,7 +85,7 @@
         ctx.fillText('O ' + fmt(k.o) + '  H ' + fmt(k.h) + '  L ' + fmt(k.l) + '  C ' + fmt(k.c), 6, PAD_T + 2);
       }
       if (data.simulated) {
-        ctx.font = 'bold 11px monospace'; ctx.fillStyle = 'rgba(245,190,50,0.85)'; ctx.textBaseline = 'top';
+        ctx.font = "15px 'VT323','Courier New',monospace"; ctx.fillStyle = 'rgba(245,190,50,0.85)'; ctx.textBaseline = 'top';
         ctx.fillText('SIMULATED PRICES', plotW - 130, PAD_T + 2);
       }
     }
@@ -119,7 +119,7 @@
     if (base > 0) { ctx.strokeStyle = COL.grid; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(8, Y(base)); ctx.lineTo(W - 62, Y(base)); ctx.stroke(); ctx.setLineDash([]); }
     ctx.strokeStyle = pts[pts.length - 1].equity >= (base || pts[0].equity) ? COL.up : COL.down; ctx.lineWidth = 1.5;
     ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(X(i), Y(p.equity)) : ctx.moveTo(X(i), Y(p.equity))); ctx.stroke(); ctx.lineWidth = 1;
-    ctx.fillStyle = COL.axis; ctx.font = '11px monospace'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = COL.axis; ctx.font = "15px 'VT323','Courier New',monospace"; ctx.textBaseline = 'middle';
     ctx.fillText(hi.toFixed(0), W - 58, 10); ctx.fillText(lo.toFixed(0), W - 58, H - 16);
   }
 

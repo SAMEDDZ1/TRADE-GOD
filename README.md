@@ -115,6 +115,13 @@ node test/trading.risk.test.js     # any single test
 npm run test:fast  # the full gate
 ```
 
+## Run free with a local model
+
+No API key needed: install [Ollama](https://ollama.com), pull a model that can call tools (`ollama pull qwen3:8b`), and
+choose **OLLAMA** on the first-run brain screen or under **SETTINGS → PROVIDERS**. Local models are smaller than the
+cloud ones, so expect slower, rougher analysis — fine for practising the workflow on the paper account, but give the
+Trading Council (Bull, Bear, Risk Manager) a strong cloud model before you trust its arguments.
+
 ## Status
 
 See [docs/TRADE_GOD_SPEC.md](docs/TRADE_GOD_SPEC.md) for the full plan and what is done.

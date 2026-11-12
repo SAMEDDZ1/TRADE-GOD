@@ -7,7 +7,7 @@ const { makeTradingTools } = require('../sidecar/tools/builtin/trading.js');
 const { CAP_REGISTRY } = require('../sidecar/capability/registry.js');
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tg-tools-'));
-const desk = makeTradingRoutes({ fs, path, dir, readBody: async () => '', respondJson: () => {}, noDriver: true, log: () => {} });
+const desk = makeTradingRoutes({ fs, path, dir, readBody: async () => '', respondJson: () => {}, noDriver: true, now: () => Date.now(), log: () => {} });
 function toolsFor(agentId) { const reg = new Map(); makeTradingTools({ desk, agentId }).register({ register: t => reg.set(t.name, t) }); return reg; }
 const J = r => JSON.parse(r.content.split('}. Next:')[0].replace(/\}[^}]*$/, '}'));
 

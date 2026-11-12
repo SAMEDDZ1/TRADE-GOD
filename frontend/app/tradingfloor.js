@@ -189,7 +189,7 @@
       out.setTransform(s, 0, 0, s, 0, 0);
       out.textBaseline = 'middle';
       // ticker
-      out.font = 'bold 7px monospace';
+      out.font = "10px 'VT323','Courier New',monospace";
       const quotes = st ? Object.entries(st.quotes || {}) : [];
       const tape = quotes.map(([k, q]) => k + ' ' + q.bid).join('    ') + '    ';
       const tapeW = out.measureText(tape).width || 1;
@@ -203,12 +203,12 @@
         }
       }
       out.restore();
-      if (st && st.feed && st.feed.simulated) { out.font = 'bold 6px monospace'; out.fillStyle = PAL.gold; out.fillText('SIMULATED', W - 52, 25); }
-      out.font = 'bold 6px monospace'; out.fillStyle = halted ? '#ff8c80' : '#6fd29a';
+      if (st && st.feed && st.feed.simulated) { out.font = "8px 'VT323','Courier New',monospace"; out.fillStyle = PAL.gold; out.fillText('SIMULATED', W - 52, 25); }
+      out.font = "8px 'VT323','Courier New',monospace"; out.fillStyle = halted ? '#ff8c80' : '#6fd29a';
       out.fillText(halted ? 'TRADING HALTED' : 'MARKETS OPEN', W / 2 + 10, 19);
       // zone labels + names
-      for (const [dept, c, r] of ZONES) { out.font = 'bold 6px monospace'; out.fillStyle = PAL.gold; out.fillText(dept.toUpperCase(), c * ZW + 8, TOP + r * ZH + 10); }
-      out.font = '5px monospace';
+      for (const [dept, c, r] of ZONES) { out.font = "8px 'VT323','Courier New',monospace"; out.fillStyle = PAL.gold; out.fillText(dept.toUpperCase(), c * ZW + 8, TOP + r * ZH + 10); }
+      out.font = "7px 'VT323','Courier New',monospace";
       for (const sAt of seats) {
         out.fillStyle = sAt.on ? PAL.text : '#5d6474';
         // two short lines that always fit the 31px desk: "Chief Investment Officer" -> "Chief" / "Investment"
@@ -216,28 +216,28 @@
         for (const w of words) { const i = lines[0] && (lines[0] + ' ' + w).length > 11 ? 1 : 0; if (i === 1 && lines[1] && (lines[1] + ' ' + w).length > 11) break; lines[i] = (lines[i] ? lines[i] + ' ' : '') + w; }
         out.fillText(lines[0].slice(0, 12), sAt.x, sAt.y + 48);
         if (lines[1]) out.fillText(lines[1].slice(0, 12), sAt.x, sAt.y + 53);
-        if (sAt.lvl && LEVEL_COL[sAt.lvl]) { out.fillStyle = LEVEL_COL[sAt.lvl]; out.font = 'bold 5px monospace'; out.fillText(sAt.lvl.toUpperCase(), sAt.x, sAt.y + 58); out.font = '5px monospace'; }
+        if (sAt.lvl && LEVEL_COL[sAt.lvl]) { out.fillStyle = LEVEL_COL[sAt.lvl]; out.font = "7px 'VT323','Courier New',monospace"; out.fillText(sAt.lvl.toUpperCase(), sAt.x, sAt.y + 58); out.font = "7px 'VT323','Courier New',monospace"; }
       }
       // board
-      out.font = 'bold 6px monospace'; out.fillStyle = PAL.gold; out.fillText('YOUR DESK — PAPER ACCOUNT', cx + 10, cy + 10);
+      out.font = "8px 'VT323','Courier New',monospace"; out.fillStyle = PAL.gold; out.fillText('YOUR DESK — PAPER ACCOUNT', cx + 10, cy + 10);
       if (st) {
         const a = st.account;
-        out.font = 'bold 9px monospace'; out.fillStyle = PAL.text; out.fillText((a.accountCcy || '') + ' ' + Number(a.equity).toLocaleString('en-US', { maximumFractionDigits: 2, minimumFractionDigits: 2 }), cx + 26, cy + 28);
-        out.font = 'bold 7px monospace'; out.fillStyle = a.dayPnl >= 0 ? PAL.up : PAL.down;
+        out.font = "13px 'VT323','Courier New',monospace"; out.fillStyle = PAL.text; out.fillText((a.accountCcy || '') + ' ' + Number(a.equity).toLocaleString('en-US', { maximumFractionDigits: 2, minimumFractionDigits: 2 }), cx + 26, cy + 28);
+        out.font = "10px 'VT323','Courier New',monospace"; out.fillStyle = a.dayPnl >= 0 ? PAL.up : PAL.down;
         out.fillText('TODAY ' + (a.dayPnl >= 0 ? '+' : '') + Number(a.dayPnl).toFixed(2), cx + 26, cy + 40);
-        out.fillStyle = PAL.text; out.font = '6px monospace';
+        out.fillStyle = PAL.text; out.font = "8px 'VT323','Courier New',monospace";
         out.fillText(a.openPositions + ' open · ' + (sc && sc.overall ? sc.overall.n : 0) + ' closed trades', cx + 26, cy + 51);
         out.fillStyle = pend ? PAL.gold : '#6b7280'; out.fillText(pend ? pend + ' WAITING' : 'all clear', cx + 108, cy + 103);
       }
-      out.font = 'bold 6px monospace'; out.fillStyle = PAL.gold; out.fillText('THE COMMANDER', cx + 64, cy + 128);
+      out.font = "8px 'VT323','Courier New',monospace"; out.fillStyle = PAL.gold; out.fillText('THE COMMANDER', cx + 64, cy + 128);
       // hover card
       if (hover) {
         const sAt = seats.find(x => hover.x >= x.x && hover.x <= x.x + x.w && hover.y >= x.y && hover.y <= x.y + x.h);
         if (sAt) {
           const bx = Math.min(W - 150, sAt.x + 24), by = Math.max(18, sAt.y - 6);
           out.fillStyle = 'rgba(5,7,11,0.95)'; out.fillRect(bx, by, 146, 30); out.strokeStyle = PAL.gold; out.lineWidth = 0.5; out.strokeRect(bx, by, 146, 30);
-          out.font = 'bold 6px monospace'; out.fillStyle = PAL.gold; out.fillText(sAt.role.name, bx + 4, by + 7);
-          out.font = '5px monospace'; out.fillStyle = PAL.text; out.fillText(String(sAt.role.tagline || '').slice(0, 44), bx + 4, by + 15);
+          out.font = "8px 'VT323','Courier New',monospace"; out.fillStyle = PAL.gold; out.fillText(sAt.role.name, bx + 4, by + 7);
+          out.font = "7px 'VT323','Courier New',monospace"; out.fillStyle = PAL.text; out.fillText(String(sAt.role.tagline || '').slice(0, 44), bx + 4, by + 15);
           out.fillStyle = '#9aa3b5'; out.fillText((sAt.on ? 'On the floor' : 'Seat open — recruit from CREW') + (sAt.role.aiHint ? ' · suits ' + sAt.role.aiHint : ''), bx + 4, by + 23);
         }
       }

@@ -39,7 +39,7 @@
 .tg-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 .tg-tbl th { text-align: left; font-size: 10px; letter-spacing: .08em; opacity: .6; border-bottom: 1px solid var(--tg-line); padding: 3px 4px; }
 .tg-tbl td { border-bottom: 1px solid rgba(255,255,255,.04); padding: 3px 4px; vertical-align: top; }
-.tg-json { font-family: monospace; font-size: 11px; opacity: .8; word-break: break-all; }
+.tg-json { font-family: inherit; font-size: 11px; opacity: .8; word-break: break-all; }
 .tg-ticket { display: flex; flex-direction: column; gap: 6px; }
 .tg-ticket label, .tg-setup label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
 .tg-ticket label em { color: var(--tg-dn); font-style: normal; font-size: 10px; }
@@ -83,3 +83,13 @@
 .tg-setup .tg-wide { grid-column: 1 / -1; }
 .tg-floor { width: 100%; display: block; border: 1px solid var(--tg-line); image-rendering: pixelated; cursor: default; }
 .tg label.tg-chk { display: block !important; } .tg label.tg-chk input { margin-right: 6px; vertical-align: middle; }
+
+/* the desk's own confirm / type-to-confirm dialog (no OS dialogs over the terminal) */
+.tg-root { position: relative; }
+.tg-ask { position: absolute; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; background: rgba(4,6,12,.72); }
+.tg-ask-card { min-width: 320px; max-width: 520px; background: #0d111c; border: 1px solid var(--tg-gold, #f5be32); padding: 16px 18px; box-shadow: 0 10px 40px rgba(0,0,0,.6); }
+.tg-ask-card.danger { border-color: #e2453c; }
+.tg-ask-msg { margin-bottom: 12px; line-height: 1.35; }
+.tg-ask-in { width: 100%; box-sizing: border-box; margin-bottom: 12px; background: rgba(0,0,0,.35); border: 1px solid var(--tg-line); color: inherit; padding: 6px 8px; font-family: inherit; font-size: 15px; letter-spacing: .06em; }
+.tg-ask-row { display: flex; gap: 8px; justify-content: flex-end; }
+.tg-ask-danger { background: #b3241a; color: #fff; border-color: #ff6b5e; font-weight: 800; }

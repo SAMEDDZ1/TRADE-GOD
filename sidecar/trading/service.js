@@ -21,6 +21,7 @@
 
    Unit-tested in test/trading.service.test.js. */
 'use strict';
+const { note: failNote } = require('../failopen.js');
 const I = require('./instruments.js');
 const R = require('./risk.js');
 const Paper = require('./paper.js');
@@ -44,7 +45,9 @@ function defaults() {
 
 function createService(deps) {
   const { fs, path, dir } = deps;
-  const now = deps.now || (() => Date.now());
+  // the clock is injected (the host passes the real one; tests pass a fake) — no ambient time in desk logic
+  if (typeof deps.now !== 'function') throw new Error('createService: deps.now (the clock) is required');
+  const now = deps.now;
   // the host passes its durable writer; standalone (tests, the preview) uses persist's atomic temp + fsync + rename
   const write = deps.writeFile || ((file, data) => require('../persist/write.js').writeAtomic({ fs, path, mode: 0o600 }, file, data));
   const F = name => path.join(dir, name);
@@ -76,7 +79,7 @@ function createService(deps) {
   const persistPaper = () => save('paper.json', paper.snapshot());
   const persistTickets = () => { if (tickets.length > TICKET_CAP) tickets = tickets.slice(-TICKET_CAP); save('tickets.json', tickets); };
   const persistAgents = () => save('agents.json', agents);
-  function emit(type, data) { for (const fn of listeners) { try { fn({ type, data, ts: now() }); } catch (_) { /* a listener must never break the desk */ } } }
+  function emit(type, data) { for (const fn of listeners) { try { fn({ type, data, ts: now() }); } catch (e) { failNote('trading.listener', e); /* a listener must never break the desk */ } } }
   function log(type, data) { const e = journal.append(type, data, now()); emit(type, data); return e; }
 
   // ---------------- views ----------------

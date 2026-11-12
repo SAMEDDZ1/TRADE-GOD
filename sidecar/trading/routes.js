@@ -46,7 +46,9 @@ const TICK_MS = 2000;
 
 function makeTradingRoutes(deps) {
   const { fs, path, dir, readBody, respondJson } = deps;
-  const now = deps.now || (() => Date.now());
+  // the clock is injected (the host passes the real one; tests pass a fake) — no ambient time in desk logic
+  if (typeof deps.now !== 'function') throw new Error('makeTradingRoutes: deps.now (the clock) is required');
+  const now = deps.now;
   const log = deps.log || (() => {});
   const svc = createService({ fs, path, dir, now, writeFile: deps.writeFile, log });
   let oanda = null, oandaInfo = null, feedError = '', timer = null, busy = false, lastTickAt = 0;
