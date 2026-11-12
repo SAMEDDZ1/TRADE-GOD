@@ -291,11 +291,24 @@
       + '<label class="tg-chk"><input type="checkbox" name="monteCarlo" checked> Monte Carlo drawdowns</label>'
       + '<label>Real candles (optional) — paste a TradingView "Export chart data" CSV or pick the file <input type="file" name="csvfile" accept=".csv,text/csv"><textarea name="csv" rows="3" placeholder="time,open,high,low,close"></textarea></label>'
       + '<button type="button" class="tg-btn tg-go" data-act="backtest"' + (S.labBusy ? ' disabled' : '') + '>' + (S.labBusy ? 'RUNNING…' : 'RUN BACKTEST') + '</button>'
+      + '<button type="button" class="tg-btn" data-act="breed"' + (S.labBusy ? ' disabled' : '') + ' title="Try many settings on older data, judge the best few on newer data they never saw">BREED VARIANTS</button>'
+      + '<p class="dim tg-fine">BREED tries ~40 settings of this strategy on the first 70% of the history and judges the best five only on the last 30%.</p>'
       + '</form><div class="tg-labres" data-slot="labres"></div></div>';
     renderLabResult();
   }
+  function renderBreed(el, B) {
+    const b = B.breed, fmt = p => Object.entries(p).filter(([k]) => k !== 'exitOnOpposite').map(([k, v]) => k + ' ' + v).join(' · ');
+    el.innerHTML = b.caveats.map(c => '<div class="tg-caveat' + (/SIMULATED|luck/.test(c) ? ' loud' : '') + '">' + esc(c) + '</div>').join('')
+      + '<div class="tg-card"><div class="tg-cardhd"><b>STRATEGY BREEDER</b> ' + esc(b.strategy) + ' on ' + esc(b.symbol) + ' — ' + b.tried + ' variants tried, '
+      + '<span class="tg-pill ' + (b.survivors ? 'ok' : 'bad') + '">' + b.survivors + ' SURVIVED</span></div>'
+      + '<table class="tg-tbl"><tr><th>SETTINGS</th><th>TRAIN PF</th><th>TRAIN TRADES</th><th>UNSEEN PF</th><th>UNSEEN NET</th><th>UNSEEN TRADES</th><th>VERDICT</th></tr>'
+      + b.shortlist.map(x => { const os = x.outOfSample || {}; return '<tr><td>' + esc(fmt(x.params)) + '</td><td>' + (x.inSample.profitFactor == null ? '—' : x.inSample.profitFactor) + '</td><td>' + x.inSample.n + '</td><td>' + (os.profitFactor == null ? '—' : os.profitFactor)
+        + '</td><td class="' + tone(os.netPnl) + '">' + signed(os.netPnl) + '</td><td>' + (os.n == null ? '—' : os.n) + '</td><td>' + (x.survived ? '<span class="tg-pill ok">SURVIVED</span>' : '<span class="tg-pill bad">FAILED</span> <span class="dim">' + esc(x.reasons.join('; ')) + '</span>') + '</td></tr>'; }).join('')
+      + '</table><p class="dim">Defaults were: ' + esc(fmt(b.defaults)) + '. Put a survivor\'s settings into the form and RUN BACKTEST to see its full history, then paper-trade it before trusting it.</p></div>';
+  }
   function renderLabResult() {
     const el = slot('labres'); if (!el) return;
+    if (S.breedRes) { if (!S.breedRes.ok) { el.innerHTML = '<p class="tg-bad">' + esc(S.breedRes.error) + '</p>'; return; } renderBreed(el, S.breedRes); return; }
     const L = S.lab;
     if (!L) { el.innerHTML = '<p class="dim">Costs (spread, slippage, commission) are ON. Entries fill on the next bar\'s open. When a bar touches both the stop and the target, the stop is assumed. That is how this backtester avoids flattering you.</p>'; return; }
     if (!L.ok) { el.innerHTML = '<p class="tg-bad">' + esc(L.error) + '</p>'; return; }
@@ -413,8 +426,17 @@
         let csv = v.csv || '';
         const f = form.querySelector('input[name="csvfile"]').files[0];
         if (f) csv = await f.text();
-        S.labBusy = true; S.labStrategy = v.strategy; S.labSymbol = v.symbol; paneLab(slot('pane'));
+        S.labBusy = true; S.labStrategy = v.strategy; S.labSymbol = v.symbol; S.breedRes = null; paneLab(slot('pane'));
         S.lab = await post('/api/trading/backtest', { symbol: v.symbol, strategy: v.strategy, granularity: v.granularity, count: Number(v.count), params, riskPct: Number(v.riskPct), startingEquity: Number(v.startingEquity), walkForward: !!v.walkForward, monteCarlo: !!v.monteCarlo, csv });
+        S.labBusy = false; paneLab(slot('pane'));
+        return;
+      } else if (act === 'breed') {
+        const form = slot('labform'), v = formVals(form);
+        let csv = v.csv || '';
+        const f = form.querySelector('input[name="csvfile"]').files[0];
+        if (f) csv = await f.text();
+        S.labBusy = true; S.labStrategy = v.strategy; S.labSymbol = v.symbol; paneLab(slot('pane'));
+        S.breedRes = await post('/api/trading/breed', { symbol: v.symbol, strategy: v.strategy, granularity: v.granularity, count: Math.max(Number(v.count), 3000), csv, riskPct: Number(v.riskPct), startingEquity: Number(v.startingEquity) });
         S.labBusy = false; paneLab(slot('pane'));
         return;
       } else if (act === 'verify') {

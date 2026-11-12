@@ -83,6 +83,14 @@ async function call(m, url, body) {
     A.eq((await call('POST', '/api/trading/backtest', { symbol: 'XAUUSD', strategy: 'nope' })).statusCode, 400, 'unknown strategy');
     A.eq((await call('POST', '/api/trading/backtest', { symbol: 'XAUUSD', strategy: 'ema-cross', csv: 'a,b\n1,2' })).statusCode, 400, 'a bad CSV is refused with the reason');
 
+    // ---- the Strategy Breeder ----
+    const br = await call('POST', '/api/trading/breed', { symbol: 'XAUUSD', strategy: 'ema-cross', granularity: 'H1', count: 2500, trials: 12 });
+    A.eq([br.statusCode, br.body.breed.tried, br.body.simulated], [200, 12, true], 'the breeder runs over HTTP');
+    A.ok(/SIMULATED DATA/.test(br.body.breed.caveats[0]), 'and says first that it searched invented prices');
+    const shortCsv = 'time,open,high,low,close\n' + Array.from({ length: 200 }, (_, i) => (1762000000 + i * 3600) + ',100,101,99,100.5').join('\n');
+    const tooShort = await call('POST', '/api/trading/breed', { symbol: 'XAUUSD', strategy: 'ema-cross', csv: shortCsv });
+    A.ok(tooShort.statusCode === 400 && /not enough history/.test(tooShort.body.error), 'too little history is refused with the reason');
+
     // ---- TradingView ----
     A.eq((await call('POST', '/api/trading/tv-webhook', '{"secret":"x"}')).statusCode, 503, 'off until configured');
     await call('POST', '/api/trading/settings', { patch: { tvSecret: 'tv-secret-0123456789' } });

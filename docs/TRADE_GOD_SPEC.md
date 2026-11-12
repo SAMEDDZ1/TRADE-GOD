@@ -61,6 +61,7 @@ starter tasks, gear, skills, suggested AI platform and a pixel seal. Tests: `cla
 | `indicators.js` | SMA, EMA, RSI, ATR, MACD, Bollinger, Donchian — no look-ahead |
 | `strategies.js` | EMA crossover, RSI mean reversion, Donchian breakout (parameterised, clamped) |
 | `backtest.js` | next-bar fills, costs on, stop-first, gaps, risk sizing, walk-forward verdict, Monte Carlo |
+| `breeder.js` | Strategy Breeder: settings searched in-sample, the shortlist judged only on unseen data, multiple-testing caveat |
 | `feeds.js` | deterministic labelled simulator; TradingView CSV import |
 | `oanda.js` | OANDA v20 practice connector — **untested against the live service** |
 | `tradingview.js` | webhook alerts → proposals (secret, stop law, dedupe) |
@@ -82,7 +83,6 @@ launch. `npm run preview:trading` runs it without the rest of the app.
 | Live OANDA orders | planned | Behind an explicit switch, after paper results justify it. |
 | IBKR, Alpaca, tastytrade, Coinbase, Kraken connectors | planned | Adapter shape = `oanda.js`; crypto via ccxt. |
 | Telegram trade approvals | planned | Approve / reject a ticket from the phone through the existing Telegram channel. |
-| Strategy Breeder automation | planned | Parameter search with out-of-sample survival. |
 | Economic-calendar auto-pause | planned | Block new positions around top-tier events. |
 | Pine Script → strategy | planned | |
 | Agent-name mapping on CREW scores | planned | Scores are keyed by agent id. |

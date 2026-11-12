@@ -29,6 +29,7 @@
      POST /api/trading/coach            bench / reinstate / promote a crew member
      POST /api/trading/paper/reset      {confirm:'RESET', startingBalance?}
      POST /api/trading/backtest         run a strategy over candles (feed or pasted CSV), optional walk-forward + Monte Carlo
+     POST /api/trading/breed            the Strategy Breeder: search settings in-sample, judge the shortlist out-of-sample
      POST /api/trading/tv-webhook       a TradingView alert (needs the webhook secret)
      POST /api/trading/broker/oanda/connect | /broker/oanda/disconnect      GET /api/trading/broker/status */
 'use strict';
@@ -36,6 +37,7 @@ const I = require('./instruments.js');
 const Feeds = require('./feeds.js');
 const Backtest = require('./backtest.js');
 const Strategies = require('./strategies.js');
+const Breeder = require('./breeder.js');
 const Oanda = require('./oanda.js');
 const Brokers = require('./brokers.js');
 const { createService } = require('./service.js');
@@ -228,6 +230,26 @@ function makeTradingRoutes(deps) {
       if (b.walkForward) { const w = Backtest.walkForward(opts); out.walkForward = w.ok ? { split: w.split, verdict: w.verdict, flags: w.flags, inSample: w.inSample.metrics, outOfSample: w.outOfSample.metrics } : { error: w.error }; }
       if (b.monteCarlo) out.monteCarlo = Backtest.monteCarlo(result.trades, { startingEquity: result.startingEquity, seed: 7 });
       ok(res, out);
+    }) },
+    { m: 'POST', exact: '/api/trading/breed', h: guard(async (req, res) => {
+      const b = await body(req, 8 << 20);
+      const symbol = I.normalize(b.symbol);
+      if (!symbol) return bad(res, 400, 'unknown symbol');
+      let candles, simulated, source;
+      if (typeof b.csv === 'string' && b.csv.trim()) {
+        const parsed = Feeds.parseCsvCandles(b.csv);
+        if (parsed.error) return bad(res, 400, parsed.error);
+        candles = parsed.candles; simulated = false; source = 'csv';
+      } else {
+        const g = Feeds.GRANULARITY[b.granularity] ? b.granularity : 'H1';
+        const r = await candlesFor(symbol, g, Math.min(5000, Math.max(500, Number(b.count) || 3000)));
+        if (r.error) return bad(res, 502, r.error);
+        candles = r.candles; simulated = r.simulated; source = r.source;
+      }
+      const out = Breeder.breed({ symbol, candles, strategy: String(b.strategy || ''), trials: b.trials, seed: b.seed, rates: svc._paper.rates(), riskPct: b.riskPct, startingEquity: b.startingEquity });
+      if (!out.ok) return bad(res, 400, out.error);
+      if (simulated) out.caveats.unshift('SIMULATED DATA: the breeder searched invented prices. A survivor here proves only that the search works.');
+      ok(res, { breed: out, simulated, source });
     }) },
     { m: 'POST', exact: '/api/trading/tv-webhook', h: guard(async (req, res) => {
       const raw = await readBody(req, 8192);
