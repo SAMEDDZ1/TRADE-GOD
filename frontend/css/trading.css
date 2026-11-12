@@ -1,0 +1,83 @@
+/* frontend/css/trading.css — the TRADING DESK window (windows/trading.js). Scoped under .tg so nothing leaks. */
+.term.trading-win { width: min(1320px, 96vw); max-width: 96vw; }
+.tg { --tg-up: #2ecc71; --tg-dn: #ff5a4e; --tg-gold: #f5be32; --tg-line: rgba(255,255,255,0.10); --tg-card: rgba(255,255,255,0.03);
+  display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: var(--text, #e6e6e6); }
+.tg .dim { opacity: .65; }
+.tg b { font-weight: 700; }
+.tg-up { color: var(--tg-up); } .tg-dn { color: var(--tg-dn); }
+.tg-top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; padding: 8px 10px; border: 1px solid var(--tg-line); background: var(--tg-card); }
+.tg-feed { font-weight: 700; letter-spacing: .06em; padding: 3px 8px; border: 1px solid; }
+.tg-feed.sim { color: var(--tg-gold); border-color: var(--tg-gold); }
+.tg-feed.real { color: var(--tg-up); border-color: var(--tg-up); }
+.tg-venue { letter-spacing: .08em; opacity: .8; }
+.tg-kpi { display: flex; flex-direction: column; line-height: 1.15; }
+.tg-kpi small { font-size: 10px; opacity: .6; letter-spacing: .08em; }
+.tg-kpi b { font-size: 15px; }
+.tg-kill { margin-left: auto; background: #b3241a; color: #fff; border: 2px solid #ff6b5e; font-weight: 800; letter-spacing: .1em; padding: 6px 14px; cursor: pointer; }
+.tg-kill:hover { background: #d42c20; }
+.tg-halted { margin-left: auto; background: rgba(179,36,26,.25); border: 1px solid #ff6b5e; color: #ffb3ab; padding: 5px 10px; font-weight: 700; }
+.tg-tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--tg-line); }
+.tg-tab { background: none; border: 1px solid transparent; border-bottom: none; color: inherit; padding: 6px 12px; cursor: pointer; letter-spacing: .08em; opacity: .7; }
+.tg-tab.on { opacity: 1; border-color: var(--tg-line); background: var(--tg-card); color: var(--tg-gold); }
+.tg-badge:not(:empty) { margin-left: 6px; background: var(--tg-gold); color: #111; padding: 0 6px; border-radius: 8px; font-size: 11px; }
+.tg-msg { display: none; padding: 6px 10px; border-left: 3px solid var(--tg-gold); background: var(--tg-card); }
+.tg-msg.show { display: block; } .tg-msg.ok { border-color: var(--tg-up); } .tg-msg.bad { border-color: var(--tg-dn); color: #ffb3ab; }
+.tg-sec { margin: 10px 0 4px; font-size: 11px; letter-spacing: .12em; opacity: .7; }
+.tg-desk { display: grid; grid-template-columns: 170px 1fr 290px; gap: 10px; min-height: 520px; }
+@media (max-width: 1000px) { .tg-desk { grid-template-columns: 1fr; } }
+.tg-watch { display: flex; flex-direction: column; gap: 2px; }
+.tg-wrow { display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto; text-align: left; background: none; border: 1px solid transparent; color: inherit; padding: 4px 6px; cursor: pointer; font-family: inherit; }
+.tg-wrow span:nth-child(3) { grid-column: 2; font-size: 11px; }
+.tg-wrow.on, .tg-wrow:hover { border-color: var(--tg-line); background: var(--tg-card); }
+.tg-wrow.on b { color: var(--tg-gold); }
+.tg-charthd { display: flex; align-items: center; gap: 8px; }
+.tg-tfs { margin-left: auto; display: flex; gap: 2px; }
+.tg-tf { background: none; border: 1px solid var(--tg-line); color: inherit; padding: 2px 8px; cursor: pointer; font-family: inherit; }
+.tg-tf.on { color: var(--tg-gold); border-color: var(--tg-gold); }
+.tg-chart { width: 100%; height: 340px; display: block; border: 1px solid var(--tg-line); cursor: crosshair; }
+.tg-eq { width: 100%; height: 170px; display: block; border: 1px solid var(--tg-line); margin: 8px 0; }
+.tg-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.tg-tbl th { text-align: left; font-size: 10px; letter-spacing: .08em; opacity: .6; border-bottom: 1px solid var(--tg-line); padding: 3px 4px; }
+.tg-tbl td { border-bottom: 1px solid rgba(255,255,255,.04); padding: 3px 4px; vertical-align: top; }
+.tg-json { font-family: monospace; font-size: 11px; opacity: .8; word-break: break-all; }
+.tg-ticket { display: flex; flex-direction: column; gap: 6px; }
+.tg-ticket label, .tg-setup label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+.tg-ticket label em { color: var(--tg-dn); font-style: normal; font-size: 10px; }
+.tg-ticket input, .tg-ticket select, .tg-ticket textarea, .tg-setup input, .tg-setup select, .tg-setup textarea {
+  background: rgba(0,0,0,.35); border: 1px solid var(--tg-line); color: inherit; padding: 4px 6px; font-family: inherit; font-size: 13px; }
+.tg-chk { flex-direction: row !important; align-items: baseline; gap: 6px !important; }
+.tg-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.tg-side-b, .tg-side-s { padding: 8px; font-weight: 800; letter-spacing: .1em; cursor: pointer; background: none; color: inherit; border: 1px solid var(--tg-line); font-family: inherit; }
+.tg-side-b.on { background: rgba(46,204,113,.2); border-color: var(--tg-up); color: var(--tg-up); }
+.tg-side-s.on { background: rgba(255,90,78,.2); border-color: var(--tg-dn); color: var(--tg-dn); }
+.tg-btn { background: rgba(255,255,255,.06); border: 1px solid var(--tg-line); color: inherit; padding: 6px 12px; cursor: pointer; letter-spacing: .06em; font-family: inherit; }
+.tg-btn:hover { border-color: var(--tg-gold); }
+.tg-btn:disabled { opacity: .5; cursor: wait; }
+.tg-go { background: rgba(245,190,50,.18); border-color: var(--tg-gold); color: var(--tg-gold); font-weight: 700; }
+.tg-mini { background: none; border: 1px solid var(--tg-line); color: inherit; font-size: 10px; padding: 1px 6px; cursor: pointer; font-family: inherit; }
+.tg-fine { font-size: 11px; margin: 0; }
+.tg-tline { padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,.04); }
+.tg-note { font-size: 11px; opacity: .75; margin-top: 2px; }
+.tg-pill { display: inline-block; font-size: 10px; letter-spacing: .06em; padding: 1px 6px; border: 1px solid var(--tg-line); text-transform: uppercase; }
+.tg-pill.ok { color: var(--tg-up); border-color: var(--tg-up); } .tg-pill.bad { color: var(--tg-dn); border-color: var(--tg-dn); }
+.tg-pill.warn { color: var(--tg-gold); border-color: var(--tg-gold); } .tg-pill.off { opacity: .55; }
+.tg-card { border: 1px solid var(--tg-line); background: var(--tg-card); padding: 8px 10px; margin: 8px 0; }
+.tg-cardhd { margin-bottom: 6px; }
+.tg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 4px 12px; font-size: 12px; }
+.tg-thesis { margin: 6px 0; font-size: 12px; }
+.tg-arg { margin: 4px 0; padding: 4px 8px; font-size: 12px; border-left: 3px solid; }
+.tg-arg.bull { border-color: var(--tg-up); } .tg-arg.bear { border-color: var(--tg-dn); }
+.tg-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
+.tg-reco { margin-top: 6px; padding: 6px 8px; border: 1px dashed var(--tg-gold); }
+.tg-empty { padding: 20px; text-align: center; opacity: .6; }
+.tg-lab { display: grid; grid-template-columns: 320px 1fr; gap: 14px; }
+@media (max-width: 1000px) { .tg-lab { grid-template-columns: 1fr; } }
+.tg-caveat { font-size: 12px; padding: 4px 8px; margin: 3px 0; border-left: 3px solid var(--tg-line); }
+.tg-caveat.loud { border-color: var(--tg-gold); color: var(--tg-gold); font-weight: 700; }
+.tg-bad { color: #ffb3ab; }
+.tg-setup { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 0 12px; }
+.tg-setup .tg-card label { margin: 4px 0; }
+.tg-sub { margin-top: 8px; font-size: 12px; }
+.tg-steps { margin: 4px 0 8px 18px; padding: 0; font-size: 12px; }
+.tg-steps code { font-size: 11px; }
+.tg-setup .tg-wide { grid-column: 1 / -1; }

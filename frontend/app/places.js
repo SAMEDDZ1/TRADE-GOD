@@ -23,6 +23,8 @@
   const P = (id, words, about, open) => Object.freeze({ id, words, about, open: Object.freeze(open) });
 
   const PLACES = Object.freeze([
+    // ---- TRADE (TRADE GOD) ----
+    P('trading', 'TRADE › TRADING DESK', 'the trading desk: chart, order ticket, open positions, approvals, crew scorecards, backtest lab, journal and setup', { term: 'trading' }),
     // ---- WORK ----
     P('tasks', 'MY WORK › TASKS', 'the task board: planned work as cards; assigning a card hands it to an agent', { term: 'tasks' }),
     P('deliverables', 'MY WORK › DELIVERABLES', 'everything the crew finished, with its files', { term: 'deliverables' }),

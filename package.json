@@ -36,6 +36,8 @@
     "website:stage": "node scripts/stage-website-deploy.mjs",
     "website:stage:check": "node scripts/stage-website-deploy.mjs --check",
     "start": "node sidecar/index.js",
+    "preview:trading": "node dev/trading-preview/server.js",
+    "test:trading": "node scripts/run-fast-tests.mjs trading.",
     "mcp:serve": "node sidecar/mcp/serve.js",
     "acp:serve": "node sidecar/acp/serve.js",
     "app": "node sidecar/index.js",

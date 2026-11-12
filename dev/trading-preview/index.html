@@ -1,0 +1,29 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>TRADE GOD — Trading Desk preview</title>
+<link rel="icon" href="/icon.png">
+<link rel="stylesheet" href="/css/trading.css">
+<style>
+  body { margin: 0; background: #07090f; color: #e6e9f0; font-family: "Cascadia Mono", Consolas, "DejaVu Sans Mono", monospace; }
+  header { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid rgba(255,255,255,.1); }
+  header img { width: 28px; height: 28px; image-rendering: pixelated; }
+  header b { color: #f5be32; letter-spacing: .14em; }
+  .term.trading-win { margin: 10px auto; padding: 10px; width: min(1320px, 98vw); }
+</style></head>
+<body>
+<header><img src="/icon.png" alt=""><b>TRADE GOD</b><span style="opacity:.6">trading desk preview</span></header>
+<div class="term trading-win"><div id="win"></div></div>
+<script>
+  // the two station hooks the window uses, nothing else
+  window.StationUI = { registerWindow(key, title, build) { window.__build = build; }, h: { esc: s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])) } };
+</script>
+<script src="/shared/specialties.js"></script>
+<script src="/app/tradingchart.js"></script>
+<script src="/app/windows/trading.js"></script>
+<script>
+  window.__build(document.getElementById('win'));
+  const tab = new URLSearchParams(location.search).get('tab');
+  const run = new URLSearchParams(location.search).get('run');
+  if (tab) setTimeout(() => { const b = document.querySelector('[data-tab="' + tab + '"]'); if (b) b.click();
+    if (run) setTimeout(() => { const g = document.querySelector('[data-act="' + run + '"]'); if (g) g.click(); }, 900); }, 900);
+</script>
+</body></html>
