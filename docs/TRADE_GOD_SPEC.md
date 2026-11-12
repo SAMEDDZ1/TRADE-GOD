@@ -71,6 +71,11 @@ starter tasks, gear, skills, suggested AI platform and a pixel seal. Tests: `cla
 `trading.market`, `trading.desk`, `trading.propose`, `trading.argue`, `trading.backtest`
 (`sidecar/tools/builtin/trading.js`), granted to every agent; the proposer is always the run's own agent.
 
+### Phone — done
+Owner-only chat commands `/trades`, `/approve <ticket>`, `/reject <ticket>`, `/halt` on every paired channel (Telegram,
+Discord, Slack, Matrix, Signal), behind the existing owner gate. Pings to the paired Telegram owner when a ticket needs
+approval, when the kill switch fires, and when the Coach puts a bot on probation/practice/bench (SETUP › phone alerts).
+
 ### Screens — done (v1)
 TRADING DESK window (`frontend/app/windows/trading.js`): FLOOR (pixel-art trading floor), DESK (chart, watchlist,
 ticket, positions, orders), APPROVALS, CREW (scorecards + Coach controls), BACKTEST LAB, JOURNAL, SETUP. Opens on
@@ -82,7 +87,6 @@ launch. `npm run preview:trading` runs it without the rest of the app.
 | Station world art | **partial** | The trading floor is new art. The original StarNet station view (Build Mode, rooms, props) still runs on StarNet's engine and its procedural sprites; its image assets were removed. Replacing that engine's art set is a project of its own. |
 | Live OANDA orders | planned | Behind an explicit switch, after paper results justify it. |
 | IBKR, Alpaca, tastytrade, Coinbase, Kraken connectors | planned | Adapter shape = `oanda.js`; crypto via ccxt. |
-| Telegram trade approvals | planned | Approve / reject a ticket from the phone through the existing Telegram channel. |
 | Economic-calendar auto-pause | planned | Block new positions around top-tier events. |
 | Pine Script → strategy | planned | |
 | Agent-name mapping on CREW scores | planned | Scores are keyed by agent id. |

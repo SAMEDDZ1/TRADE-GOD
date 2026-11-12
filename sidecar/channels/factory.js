@@ -57,6 +57,7 @@ const POLICY = Object.freeze({
   resolveRunConfig: { wired: ["telegram", "telegram-bot", "discord", "slack", "matrix", "signal", "dev", "sample", "trigger", "handoff"], off: "This hub kind has no caller for this dependency." },
   resolveStation: { wired: ["telegram", "telegram-bot", "discord", "slack", "matrix", "signal", "dev", "sample", "trigger", "handoff"], off: "This hub kind has no caller for this dependency." },
   roster: { wired: ["telegram", "discord", "slack", "matrix", "signal", "dev"], off: "Bound bots retain their identity; one-job hubs do not expose roster commands." },
+  trading: { wired: ["telegram", "telegram-bot", "discord", "slack", "matrix", "signal", "dev"], off: "One-job hubs (triggers, handoffs, samples) take no trading commands." },
   runOnce: { wired: ["telegram", "telegram-bot", "discord", "slack", "matrix", "signal", "dev", "sample", "trigger", "handoff"], off: "This hub kind has no caller for this dependency." },
   runSlash: { wired: ["telegram", "telegram-bot", "discord", "slack", "matrix", "signal", "dev"], off: "One-job sample/trigger inputs are not an owner command surface." },
   saveAttachment: { wired: ["telegram", "telegram-bot", "dev"], off: "This transport does not normalize supported inbound attachment bytes." },

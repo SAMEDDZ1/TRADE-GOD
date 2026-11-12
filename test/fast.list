@@ -1732,3 +1732,4 @@ test/trading.oanda.test.js
 test/trading.routes.test.js
 test/trading.tools.test.js
 test/trading.breeder.test.js
+test/trading.phone.test.js

@@ -39,7 +39,7 @@ const DEFAULT_WATCHLIST = ['XAUUSD', 'XAGUSD', 'EURUSD', 'USDCAD', 'GBPUSD', 'US
 const AGENT_FAULT = ['no-stop', 'stop-wrong-side', 'tp-wrong-side', 'risk-per-trade', 'bad-size', 'lot-step', 'below-min-lot', 'bad-side', 'bad-entry', 'instrument-leverage'];
 
 function defaults() {
-  return { country: 'CA', region: '', autonomy: 'approve-all', requireCouncil: true, tvSecret: '', watchlist: DEFAULT_WATCHLIST.slice(), feed: 'sim', paperStartingBalance: 10000 };
+  return { country: 'CA', region: '', autonomy: 'approve-all', requireCouncil: true, tvSecret: '', watchlist: DEFAULT_WATCHLIST.slice(), feed: 'sim', paperStartingBalance: 10000, phoneAlerts: true };
 }
 
 function createService(deps) {
@@ -318,6 +318,7 @@ function createService(deps) {
     if (p.requireCouncil !== undefined) next.requireCouncil = !!p.requireCouncil;
     if (p.watchlist !== undefined) { const w = Array.from(new Set((Array.isArray(p.watchlist) ? p.watchlist : []).map(I.normalize).filter(Boolean))).slice(0, 40); if (!w.length) return { ok: false, error: 'the watchlist needs at least one known symbol' }; next.watchlist = w; }
     if (p.tvSecret !== undefined) { const s = String(p.tvSecret || ''); if (s && s.length < 12) return { ok: false, error: 'the TradingView secret needs at least 12 characters' }; next.tvSecret = s.slice(0, 128); }
+    if (p.phoneAlerts !== undefined) next.phoneAlerts = !!p.phoneAlerts;
     if (p.feed !== undefined) { if (['sim', 'oanda'].indexOf(p.feed) < 0) return { ok: false, error: 'feed must be sim or oanda' }; next.feed = p.feed; }
     const changed = Object.keys(next).filter(k => JSON.stringify(next[k]) !== JSON.stringify(settings[k]));
     settings = next; save('settings.json', settings);

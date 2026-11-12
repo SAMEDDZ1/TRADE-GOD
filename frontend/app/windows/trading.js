@@ -357,7 +357,8 @@
       + '<div class="tg-card"><div class="tg-cardhd"><b>AUTONOMY</b></div>'
       + [['approve-all', 'Approve every trade', 'Nothing executes until you tap APPROVE. Recommended to start.'], ['earned', 'Earned autonomy', 'Bots you PROMOTED may execute in-limit trades without a tap. Everyone else still asks.'], ['auto', 'Automatic', 'Any bot not on probation may execute in-limit trades. Risk limits still apply to every trade.']]
         .map(([v, n, d]) => '<label class="tg-chk"><input type="radio" name="autonomy" data-set="autonomy" value="' + v + '"' + (s.autonomy === v ? ' checked' : '') + '> <b>' + n + '</b> — <span class="dim">' + d + '</span></label>').join('')
-      + '<label class="tg-chk"><input type="checkbox" data-set="requireCouncil"' + (s.requireCouncil ? ' checked' : '') + '> Every crew idea must be argued by the Bull and the Bear first</label></div>'
+      + '<label class="tg-chk"><input type="checkbox" data-set="requireCouncil"' + (s.requireCouncil ? ' checked' : '') + '> Every crew idea must be argued by the Bull and the Bear first</label>'
+      + '<label class="tg-chk"><input type="checkbox" data-set="phoneAlerts"' + (s.phoneAlerts !== false ? ' checked' : '') + '> Phone alerts on Telegram (your paired bot): trades waiting for you, the kill switch, bots put on probation. Reply <b>/approve K12</b>, <b>/reject K12</b>, <b>/trades</b> or <b>/halt</b>.</label></div>'
 
       + '<div class="tg-card"><div class="tg-cardhd"><b>RISK LIMITS</b> <span class="dim">plain code, not AI</span></div>'
       + [['riskPerTradePct', 'Max risk per trade (% of equity)', 0.05], ['maxDailyLossPct', 'Max loss per day (%) — then trading stops until tomorrow', 0.25], ['maxOpenPositions', 'Max open positions (pending orders count)', 1], ['maxTotalRiskPct', 'Max total open risk (%)', 0.25], ['maxLeverage', 'Max leverage (x:1) — the lower of this and the ' + p.jurisdiction + ' caps applies', 1]]

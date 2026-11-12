@@ -11664,6 +11664,8 @@ function telegramTransportFetch() { return makeEnvironmentProxyFetch(globalThis.
 function makeAdapterOpts(kind, overrides) {
   return channelHubFactory.makeAdapterOpts(kind, overrides);
 }
+// TRADE GOD: the trading desk, filled in when it is built (further down) — the chat hubs read it through this getter
+let tradingDeskRef = null;
 function makeHubDeps(kind, overrides) {
   return channelHubFactory.makeHubDeps(kind, {
     runOnce: runOnce,
@@ -11689,6 +11691,7 @@ function makeHubDeps(kind, overrides) {
     resolveStation: (agentId, dockId) => admit.stationFor(agentId, dockId),
     stageBriefFor: (agentId, dockId) => admit.stageBrief(agentId, dockId),
     roster: () => rosterWireRows(true),
+    trading: () => (tradingDeskRef ? tradingDeskRef.service : null),
     setModel: (agentId, model) => setAgentModelFromChannel(agentId, model),
     modelCatalog: () => { maybeRewarmModelCatalog(); return orModelCatalogIds; },
     transcribe: media.transcribeForMime,
@@ -13214,6 +13217,31 @@ const tradingDesk = makeTradingRoutes({
   // the crew as the page last pushed it (POST /api/roster): names and roles for the scorecards and the trading floor
   crew: () => Array.from(agentRoster.keys()).map(id => { const r = agentRosterRaw.get(id) || agentRoster.get(id) || {};
     return { agentId: id, name: String(r.name || id).slice(0, 60), role: /^[a-z0-9]{1,30}$/.test(String(r.specialtyId || '')) ? String(r.specialtyId) : '' }; })
+});
+tradingDeskRef = tradingDesk;
+// PHONE PINGS: a ticket that needs the Commander, a kill switch, and a Coach demotion are sent to the owner's DM on every
+// paired channel (owner-only commands /approve /reject answer them). Off with the desk setting phoneAlerts:false.
+tradingDesk.service.onEvent(e => {
+  try {
+    // the paired owner of the station's Telegram bot (a Telegram DM's chat id is the user's id); no owner, no ping
+    const ownerChat = telegram && channelSecrets && channelSecrets.telegram && channelSecrets.telegram.ownerId ? String(channelSecrets.telegram.ownerId) : '';
+    if (!ownerChat || tradingDesk.service.settings().phoneAlerts === false) return;
+    let text = '';
+    if (e.type === 'ticket.awaiting-approval') {
+      const t = tradingDesk.service.ticket(e.data && e.data.id);
+      if (!t) return;
+      const m = (t.risk && t.risk.metrics) || {};
+      text = '⏳ TRADE GOD — ' + t.id + ' needs you: ' + String(t.side).toUpperCase() + ' ' + t.symbol + ' ' + t.lots + ' lots @' + t.entry + ' · stop ' + t.stop
+        + (t.takeProfit ? ' · target ' + t.takeProfit : '') + (m.riskAmount != null ? ' · risk ' + m.riskAmount + ' (' + m.riskPct + '%)' : '') + ' · by ' + (t.agentId || t.source)
+        + '\n/approve ' + t.id + '   /reject ' + t.id + '   (expires in 30 min)';
+    } else if (e.type === 'halt.on') text = '⛔ TRADE GOD — KILL SWITCH ON: ' + ((e.data && e.data.reason) || '') + '. All paper positions closed.';
+    else if (e.type === 'coach.move' && e.data && ['probation', 'practice', 'benched'].indexOf(e.data.to) >= 0) text = '🏋 TRADE GOD — the Agent Coach moved ' + e.data.agentId + ' to ' + String(e.data.to).toUpperCase() + ': ' + (e.data.reasons || []).join('; ');
+    if (!text) return;
+    // through the ONE outbound contract (health, platform limits, delivery record), like every other notification
+    Promise.resolve(channelOutbound.send({ channel: 'telegram', chatId: ownerChat }, redact(text), { durable: false, reason: 'notify' }))
+      .then(r => { if (r && r.ok === false) console.warn('[trading] phone ping failed:', r.error); })
+      .catch(err => console.warn('[trading] phone ping failed:', (err && err.message) || err));
+  } catch (err) { console.warn('[trading] phone ping failed:', (err && err.message) || err); }
 });
 const TRADING_TV_HOOK = '/api/trading/tv-webhook';
 const tradingTvHookRoute = tradingDesk.routes.find(r => r.exact === TRADING_TV_HOOK);

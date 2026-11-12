@@ -584,6 +584,11 @@ const CHANNEL_COMMANDS = Object.freeze([
     // through from a group it does not answer in yet, so the owner can open it from the inside.
     { command: 'allow', description: 'In a group: let me answer here', owner: 'always' },
     { command: 'deny', description: 'In a group: stop me answering here', owner: 'always' },
+    // TRADE GOD — the trading desk from your phone. Owner-only: a group member or a stranger who found the bot is refused.
+    { command: 'trades', description: 'Trades waiting for your approval, and the paper account', owner: 'always' },
+    { command: 'approve', description: 'Approve a waiting trade', usage: '/approve <ticket id>', owner: 'always' },
+    { command: 'reject', description: 'Reject a waiting trade', usage: '/reject <ticket id>', owner: 'always' },
+    { command: 'halt', description: 'KILL SWITCH: close every paper position and block new trades', owner: 'always' },
     { command: 'whoami', description: 'Show which agent this chat is talking to' },
     { command: 'help', description: 'List these commands', menu: false },
     // Telegram sends this when a fresh chat's START button is pressed. menu:false — the client offers it on an

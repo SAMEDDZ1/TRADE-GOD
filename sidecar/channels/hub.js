@@ -432,6 +432,9 @@
     // palette uses, in-process (no self-HTTP, no api token). Injected so this module stays testable and so a
     // wire-up that has no slash layer simply reports the command as unavailable rather than crashing.
     const runSlashFn = typeof o.runSlash === 'function' ? o.runSlash : null;
+    // TRADE GOD: the trading desk (sidecar/trading/service.js) for /trades /approve /reject /halt — a getter, so a hub built
+    // before the desk exists still finds it; absent on one-job hubs (factory.js POLICY)
+    const tradingFn = typeof o.trading === 'function' ? o.trading : null;
     // names of the Commander's own commands, so this hub can recognise one without owning the list
     const userCommandNames = typeof o.userCommandNames === 'function' ? o.userCommandNames : (() => []);
     // desktopCommand(token) -> true when the shared registry's BUILT-IN table knows this name or alias (slash.resolve):
@@ -978,6 +981,37 @@
       // NOTE: no dedicated channel.command/rebind/model bus events — shared/events.js is owned by another
       // workstream (additive-only, by request). The command's honest confirmation is the reply itself; the
       // downstream binding/roster writes are observable in the chatmap + roster files. See report.
+
+      // ---- TRADE GOD: the trading desk from the phone (owner-only — the OWNER GATE above refused anyone else) ----
+      if (cmd === 'trades' || cmd === 'approve' || cmd === 'reject' || cmd === 'halt') {
+        let desk = null;
+        try { desk = tradingFn ? tradingFn() : null; } catch (_) { desk = null; }
+        if (!desk) { await deliver(chatId, 'The trading desk is not available on this channel.', '', 'command'); return; }
+        const fmt = (n, d) => (n == null || !isFinite(n)) ? '—' : Number(n).toFixed(d == null ? 2 : d);
+        const line = t => t.id + ' ' + String(t.side).toUpperCase() + ' ' + t.symbol + ' ' + t.lots + ' lots @' + t.entry + ' · stop ' + t.stop + (t.takeProfit ? ' · target ' + t.takeProfit : '')
+          + (t.risk && t.risk.metrics && t.risk.metrics.riskAmount != null ? ' · risk ' + fmt(t.risk.metrics.riskAmount) + ' (' + t.risk.metrics.riskPct + '%)' : '') + ' · by ' + (t.agentId || t.source);
+        if (cmd === 'trades') {
+          const snap = desk.snapshot(), a = snap.account;
+          const waiting = snap.pending.filter(t => t.status === 'awaiting-approval');
+          const council = snap.pending.filter(t => t.status === 'awaiting-council');
+          const head = 'PAPER ACCOUNT ' + a.accountCcy + ' ' + fmt(a.equity) + ' · today ' + (a.dayPnl >= 0 ? '+' : '') + fmt(a.dayPnl) + ' · ' + a.openPositions + ' open' + (snap.halted.on ? '\n⛔ TRADING HALTED: ' + snap.halted.reason : '');
+          const body = waiting.length ? waiting.map(t => '• ' + line(t) + (t.thesis ? '\n  why: ' + String(t.thesis).slice(0, 200) : '') + '\n  /approve ' + t.id + '   /reject ' + t.id).join('\n') : 'Nothing is waiting for your approval.';
+          await deliver(chatId, head + '\n\n' + body + (council.length ? '\n\n' + council.length + ' more being argued by the Bull and Bear.' : ''), '', 'command');
+          return;
+        }
+        if (cmd === 'halt') {
+          const r = desk.halt('kill switch from ' + channel, 'commander');
+          await deliver(chatId, '⛔ KILL SWITCH ON. Closed ' + r.closed + ' paper position(s), cancelled ' + r.cancelled + ' order(s).' + (r.stuck && r.stuck.length ? ' COULD NOT CLOSE: ' + r.stuck.map(x => x.symbol).join(', ') + '.' : '') + ' Resume from the TRADING DESK on your computer.', '', 'command');
+          return;
+        }
+        const id = String(arg || '').trim().toUpperCase().replace(/^#/, '');
+        if (!/^K\d{1,8}$/.test(id)) { await deliver(chatId, 'Which ticket? Send /' + cmd + ' K12 — /trades lists the waiting ones.', '', 'command'); return; }
+        const r = desk.decide(id, { approve: cmd === 'approve', note: 'from ' + channel });
+        if (!r.ok) { await deliver(chatId, '⚠ ' + id + ': ' + r.error, '', 'command'); return; }
+        const t = r.ticket;
+        await deliver(chatId, (t.status === 'executed' ? '✅ ' + id + ' approved and filled on the PAPER account at ' + (t.execution && t.execution.price) : (cmd === 'reject' ? '✖ ' + id + ' rejected.' : '⚠ ' + id + ' was not filled: ' + t.note)), '', 'command');
+        return;
+      }
 
       if (cmd === 'help') {
         await deliver(chatId, helpText(), '', 'command');

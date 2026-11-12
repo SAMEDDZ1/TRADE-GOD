@@ -31,7 +31,9 @@ const POLICY = {
   status: 'open', agents: 'open', whoami: 'open', tools: 'open', help: 'open', start: 'open',
   model: 'write', approvals: 'write', mention: 'write',
   stop: 'always', new: 'always', talk: 'always', usage: 'always', routine: 'always', away: 'always',
-  allow: 'always', deny: 'always'   // only the paired owner opens or closes a group (2026-10-19)
+  allow: 'always', deny: 'always',   // only the paired owner opens or closes a group (2026-10-19)
+  // TRADE GOD: the trading desk from the phone — reading the account, approving, rejecting and the kill switch are the owner's alone
+  trades: 'always', approve: 'always', reject: 'always', halt: 'always'
 };
 
 function fakeStore() {

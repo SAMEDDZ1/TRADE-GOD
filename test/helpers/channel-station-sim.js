@@ -117,7 +117,7 @@ const MANIFEST = {
       persona: 'a fixed persona', classify: 'every message is a task', redact: 'identity', emit: 'records channel.delivery events',
       briefFor: 'no brief', groundedFor: 'none', resolveAgent: 'no floor plan', lineRunner: 'no work line',
       lineOriginFor: 'no line', intakeReceiptFor: 'no floor binding or durable line intake in this delivery simulation', getTag: 'no tag', resolveStation: 'office default', stageBriefFor: 'no brief', roster: 'empty', setModel: 'refused',
-      modelCatalog: 'empty', fetchMedia: 'no media', transcribe: 'no media', saveAttachment: 'no media', expandAttachments: 'identity'
+      modelCatalog: 'empty', trading: 'no trading desk in this delivery simulation', fetchMedia: 'no media', transcribe: 'no media', saveAttachment: 'no media', expandAttachments: 'identity'
     }
   },
   stationAdapter: {
