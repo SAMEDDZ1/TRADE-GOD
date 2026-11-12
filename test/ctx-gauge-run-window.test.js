@@ -168,7 +168,7 @@ function gauge(cs) {
 
 // ---- 5. the website app ships the same ----
 {
-  const web = rel => read('website/app/app/' + rel);
+  const web = rel => read('frontend/app/' + rel);
   A.ok(web('harness.js').indexOf('runWindow: (run > 0 && limit > 0 && run < limit) ? run : limit') >= 0, 'the website harness.js mirror carries contextState.runWindow');
   A.ok(web('stationui.js').indexOf('tier ? cs.runWindow : cs.limit') >= 0, 'the website stationui.js mirror measures the gauge against it');
   A.ok(web('app.js').indexOf('const run = row ? (Number(row.runWindow) || 0) : 0;') >= 0, 'the website app.js mirror carries the setup hint (the picked row’s runWindow)');

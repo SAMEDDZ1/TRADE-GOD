@@ -1,0 +1,262 @@
+# fast-gate — the release train's gate job, run on every trunk push and PR.
+#
+# Before this workflow, `npm run test:fast` ran in CI ONLY inside release-train.yml, so a red
+# trunk was discovered at tag time (v0.2.0/v0.2.1, v0.10.10). eval-gates.yml stays as the 44s
+# credential-free eval slice; this is the full test/fast.list manifest gate.
+#
+# The gate job runs test/fast.list as four contiguous shards plus one customer-journeys leg: one job
+# running both had reached ~24.5 of its 25 minutes, with every lane still adding steps. Shards are cut
+# from the list when they run (scripts/run-test-list.mjs --shard=K/N), so a new line needs no edit here.
+# test/fast-gate-shards.test.js holds this shape. `npm run test:fast` and the release train still run
+# the whole list in one go.
+#
+# The Chrome resolution + warm-up steps are copied verbatim from release-train.yml's gate job —
+# the CDP e2e tests need a wrapper binary with --no-sandbox and a proven <10s cold start.
+# Keep the two in sync; the train job remains the authority at tag time.
+name: fast-gate
+
+# TRADE GOD: run on pull requests and on demand (Actions → fast-gate → Run workflow). Not on every push to main —
+# four 25-minute shards per push would burn a private repo's Actions minutes quickly.
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fast-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: gate (${{ matrix.part }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        part: ['1/4', '2/4', '3/4', '4/4', journeys]
+    steps:
+      # fetch-depth: 0 — the claims-authority test resolves the release-surface manifest's
+      # sourceCommit against the object store; a shallow checkout reads BLOCKED on a green trunk.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm ci
+
+      - name: Resolve Chrome binary for e2e gate tests
+        run: |
+          set -euo pipefail
+          CHROME=$(command -v google-chrome || command -v google-chrome-stable || command -v chromium-browser || true)
+          if [ -z "$CHROME" ]; then
+            echo "::error::no Chrome/Chromium binary on this runner — the e2e gate tests cannot run. Install one or set SKYNET_CHROME."
+            exit 1
+          fi
+          WRAP=/usr/local/bin/tradegod-ci-chrome
+          printf '#!/bin/sh\nexec %s --no-sandbox --disable-dev-shm-usage "$@"\n' "$CHROME" | sudo tee "$WRAP" > /dev/null
+          sudo chmod +x "$WRAP"
+          echo "SKYNET_CHROME=$WRAP" >> "$GITHUB_ENV"
+          echo "::notice::e2e gate tests will use $WRAP -> $CHROME (+ --no-sandbox --disable-dev-shm-usage)"
+
+      - name: Warm Chrome, then prove CDP comes up inside the tests' 10s window
+        run: |
+          set -euo pipefail
+          "$SKYNET_CHROME" --headless=new --no-first-run --remote-debugging-port=9332 \
+            --user-data-dir="$RUNNER_TEMP/chrome-cold-warmup" about:blank > "$RUNNER_TEMP/chrome-cold-warmup.log" 2>&1 &
+          CPID=$!
+          ok=""
+          for i in $(seq 1 240); do
+            if curl -fsS http://127.0.0.1:9332/json/list > /dev/null 2>&1; then ok=1; break; fi
+            if ! kill -0 "$CPID" 2>/dev/null; then break; fi
+            sleep 0.25
+          done
+          if [ -z "$ok" ]; then
+            echo "::error::Chrome's bounded cold warmup did not answer within 60s. Chrome output follows."
+            cat "$RUNNER_TEMP/chrome-cold-warmup.log" || true
+            exit 1
+          fi
+          kill "$CPID" 2>/dev/null || true
+          wait "$CPID" 2>/dev/null || true
+
+          "$SKYNET_CHROME" --headless=new --no-first-run --remote-debugging-port=9333 \
+            --user-data-dir="$RUNNER_TEMP/chrome-cdp-proof" about:blank > "$RUNNER_TEMP/chrome-cdp-proof.log" 2>&1 &
+          CPID=$!
+          ok=""
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:9333/json/list > /dev/null 2>&1; then ok=1; break; fi
+            if ! kill -0 "$CPID" 2>/dev/null; then break; fi
+            sleep 0.25
+          done
+          if [ -z "$ok" ]; then
+            echo "::error::Warm Chrome CDP did not answer within the tests' 10s budget. Chrome output follows."
+            cat "$RUNNER_TEMP/chrome-cdp-proof.log" || true
+            exit 1
+          fi
+          kill "$CPID" 2>/dev/null || true
+          wait "$CPID" 2>/dev/null || true
+          echo "::notice::Warm Chrome CDP answered within the tests' 10s budget."
+
+      - name: Fast test gate (shard ${{ matrix.part }})
+        if: matrix.part != 'journeys'
+        run: node scripts/timeout.mjs --label test:fast --timeout=1200000 -- node scripts/run-fast-tests.mjs --shard=${{ matrix.part }} --deadline=1080000
+
+      - name: Customer journey regression gate
+        if: matrix.part == 'journeys'
+        run: npm run qa:customer-journeys
+
+  # The sidecar/HTTP integration gate (test/http.list: every suite that boots a real sidecar or owns a socket), on
+  # every trunk push and PR. Before this job http.list ran only on a developer box, so a route, boot or recovery
+  # regression surfaced at release time or in a user's report. The list runs as four contiguous shards in declared
+  # order (scripts/run-test-list.mjs --shard=K/N); fail-fast is off so one red shard never hides another's result.
+  # Every step carries the runner's own bound (120 s, 600 s for test/slow.list), so a hung suite fails by name
+  # instead of eating the job's timeout, and --deadline ends the shard with its failure list 2 min inside the
+  # 30 min wrapper. The Chrome steps are the gate job's, verbatim (several e2e suites drive
+  # CDP): keep the three copies (here, the gate job, release-train.yml) in sync.
+  http-gate:
+    name: http-gate (shard ${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm ci
+
+      - name: Resolve Chrome binary for e2e gate tests
+        run: |
+          set -euo pipefail
+          CHROME=$(command -v google-chrome || command -v google-chrome-stable || command -v chromium-browser || true)
+          if [ -z "$CHROME" ]; then
+            echo "::error::no Chrome/Chromium binary on this runner — the e2e gate tests cannot run. Install one or set SKYNET_CHROME."
+            exit 1
+          fi
+          WRAP=/usr/local/bin/tradegod-ci-chrome
+          printf '#!/bin/sh\nexec %s --no-sandbox --disable-dev-shm-usage "$@"\n' "$CHROME" | sudo tee "$WRAP" > /dev/null
+          sudo chmod +x "$WRAP"
+          echo "SKYNET_CHROME=$WRAP" >> "$GITHUB_ENV"
+          echo "::notice::e2e gate tests will use $WRAP -> $CHROME (+ --no-sandbox --disable-dev-shm-usage)"
+
+      - name: Warm Chrome, then prove CDP comes up inside the tests' 10s window
+        run: |
+          set -euo pipefail
+          "$SKYNET_CHROME" --headless=new --no-first-run --remote-debugging-port=9332 \
+            --user-data-dir="$RUNNER_TEMP/chrome-cold-warmup" about:blank > "$RUNNER_TEMP/chrome-cold-warmup.log" 2>&1 &
+          CPID=$!
+          ok=""
+          for i in $(seq 1 240); do
+            if curl -fsS http://127.0.0.1:9332/json/list > /dev/null 2>&1; then ok=1; break; fi
+            if ! kill -0 "$CPID" 2>/dev/null; then break; fi
+            sleep 0.25
+          done
+          if [ -z "$ok" ]; then
+            echo "::error::Chrome's bounded cold warmup did not answer within 60s. Chrome output follows."
+            cat "$RUNNER_TEMP/chrome-cold-warmup.log" || true
+            exit 1
+          fi
+          kill "$CPID" 2>/dev/null || true
+          wait "$CPID" 2>/dev/null || true
+
+          "$SKYNET_CHROME" --headless=new --no-first-run --remote-debugging-port=9333 \
+            --user-data-dir="$RUNNER_TEMP/chrome-cdp-proof" about:blank > "$RUNNER_TEMP/chrome-cdp-proof.log" 2>&1 &
+          CPID=$!
+          ok=""
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:9333/json/list > /dev/null 2>&1; then ok=1; break; fi
+            if ! kill -0 "$CPID" 2>/dev/null; then break; fi
+            sleep 0.25
+          done
+          if [ -z "$ok" ]; then
+            echo "::error::Warm Chrome CDP did not answer within the tests' 10s budget. Chrome output follows."
+            cat "$RUNNER_TEMP/chrome-cdp-proof.log" || true
+            exit 1
+          fi
+          kill "$CPID" 2>/dev/null || true
+          wait "$CPID" 2>/dev/null || true
+          echo "::notice::Warm Chrome CDP answered within the tests' 10s budget."
+
+      - name: HTTP test gate (shard ${{ matrix.shard }}/4)
+        run: node scripts/timeout.mjs --label test:http --timeout=1800000 -- node scripts/run-test-list.mjs test/http.list --shard=${{ matrix.shard }}/4 --deadline=1680000
+
+  # The station page boots in a real WebKit at the engine floor (webkit-floor-boot.yml): every API newer than
+  # scripts/lib/engine-floor.json's floor removed, and the boot guard must count every station script as run. The
+  # lexical half (syntax and unguarded APIs newer than the floor) is test/webkit-floor-syntax.test.js in the gate above.
+  webkit-floor:
+    uses: ./.github/workflows/webkit-floor-boot.yml
+
+  # Pure Rust policy checks. The connector key policy tests in src-tauri/src/credentials.rs and the acceptance
+  # harness's input guards use injected closures and input checks only: no keychain entry, no native process, no
+  # app build. Running them here catches a policy regression (for example regenerating over a malformed existing
+  # key, which would orphan every sealed connector credential) and a credentials.rs compile error before a cut.
+  # Never pass --ignored: that runs the production-entry roundtrip test. The native phases stay in the
+  # dispatch-only connector-keychain-acceptance workflow.
+  rust-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Connector key policy and acceptance guard tests (pure, no keychain access)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked --manifest-path test/native-connector-keychain/Cargo.toml connector_key_policy 2>&1 | tee "$RUNNER_TEMP/policy.log"
+          cargo test --locked --manifest-path test/native-connector-keychain/Cargo.toml acceptance_guards 2>&1 | tee "$RUNNER_TEMP/guards.log"
+          # a renamed test would leave a filter matching nothing, which cargo passes green: require a passed test in each
+          for log in policy guards; do
+            grep -Eq 'test result: ok\. [1-9][0-9]* passed' "$RUNNER_TEMP/$log.log" || { echo "::error::the $log filter ran no test"; exit 1; }
+          done
+
+      # The desktop shell's process-ownership rules, compiled by path without the app (test/native-process-ownership):
+      # the PID-reuse and boot rules must match the sidecar's JS rule case for case (both read
+      # test/fixtures/process-identity-cases.json), and the Linux probe runs for real here. Without this step the Rust half
+      # of that parity ran only when someone ran cargo test in src-tauri by hand. The same crate holds the station lifecycle
+      # contract (tests/station_contract.rs): the markers the native START FRESH and ERASE write must be the shapes the
+      # sidecar's record module derives from (both read test/fixtures/station-record-cases.json). It also holds the voice-model
+      # cache roots (tests/voice_cache_roots.rs): ERASE must delete exactly the roots the sidecar resolves, new and legacy (both
+      # read test/fixtures/voice-cache-roots.json).
+      - name: Process-ownership rules shared with the sidecar (parity with the JS rule)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked --manifest-path test/native-process-ownership/Cargo.toml 2>&1 | tee "$RUNNER_TEMP/ownership.log"
+          grep -Eq 'test result: ok\. [1-9][0-9]* passed' "$RUNNER_TEMP/ownership.log" || { echo "::error::the process-ownership crate ran no test"; exit 1; }
+          for t in shared_fixtures_match_the_js_rule the_shared_boot_rule_matches_the_js_rule; do
+            grep -Eq "test process_identity::tests::$t \.\.\. ok" "$RUNNER_TEMP/ownership.log" || { echo "::error::the parity test $t did not pass"; exit 1; }
+          done
+          for t in native_erase_marker_matches_the_fixture native_start_fresh_marker_matches_the_fixture an_erase_then_a_native_start_fresh_leaves_the_erase_where_derive_reads_it the_native_door_honours_every_carry_row; do
+            grep -Eq "^test $t \.\.\. ok" "$RUNNER_TEMP/ownership.log" || { echo "::error::the station lifecycle contract test $t did not pass"; exit 1; }
+          done
+          for t in the_voice_cache_roots_match_the_fixture every_voice_cache_root_is_starnet_owned a_profile_with_no_home_gives_erase_no_voice_target erase_removes_both_voice_cache_roots_and_keeps_the_fresh_workspace; do
+            grep -Eq "^test $t \.\.\. ok" "$RUNNER_TEMP/ownership.log" || { echo "::error::the voice-cache roots test $t did not pass"; exit 1; }
+          done
+
+      # The desktop shell's install manifest, compiled by path without the app (test/native-install-manifest): every code
+      # file of a fixture install laid out through the real tauri.conf.json map, damaged in turn (zeroed, deleted,
+      # truncated, edited at the same size, replaced by a folder), must be named; an absent or partial manifest is never
+      # read as verified. 85f602c4 / E62: a zeroed or quarantined shell.js that nothing named.
+      - name: Install-manifest rules (a damaged install names its file)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked --manifest-path test/native-install-manifest/Cargo.toml 2>&1 | tee "$RUNNER_TEMP/install-manifest.log"
+          grep -Eq 'test result: ok\. [1-9][0-9]* passed' "$RUNNER_TEMP/install-manifest.log" || { echo "::error::the install-manifest crate ran no test"; exit 1; }
+          for t in every_entry_damaged_in_turn_is_named absent_or_partial_manifest_is_not_checked; do
+            grep -Eq "test install_manifest::tests::$t \.\.\. ok" "$RUNNER_TEMP/install-manifest.log" || { echo "::error::the class test $t did not pass"; exit 1; }
+          done

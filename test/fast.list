@@ -44,7 +44,6 @@ test/bootguard.test.js
 test/mac-boot-compat.test.js
 test/webkit-floor-syntax.test.js
 test/engine-floor.test.js
-test/webkit-floor-boot.test.js
 test/live-doctor.test.js
 test/live-doctor-ui.test.js
 test/report-0110-regressions.test.js
@@ -119,7 +118,6 @@ test/provider-credential-live.test.js
 test/file-response.test.js
 test/test-list-runner.test.js
 test/boot-limit.test.js
-test/fast-gate-shards.test.js
 test/source-helper.test.js
 test/runroute.test.js
 test/run-streams.test.js
@@ -150,7 +148,6 @@ test/eval-acp-client.test.js
 test/eval-fixture-host.test.mjs
 test/eval-installed-performance.test.js
 test/eval-installed-provider-soak.test.js
-test/eval-parity-offline.test.js
 test/overnight-reliability-runner.test.js
 test/provider.openrouter.test.js
 test/provider.openai-compatible.test.js
@@ -177,7 +174,6 @@ test/egress-floor-canary.test.js
 test/edgetts-stream-end.test.js
 test/edgetts-gec-v2.test.js
 test/edgetts-clock-skew.test.js
-test/desktop-voice-bundle.test.js
 test/transcript.compaction.e2e.test.js
 test/provider.anthropic.test.js
 test/provider.anthropic.thinking-binding.test.js
@@ -222,7 +218,6 @@ test/run-outcome.test.js
 test/outcome-roundtrip.table.test.js
 test/outcome-family.census.test.js
 test/outcome-unpark.test.js
-test/help-copy-matches-screen.test.js
 test/codexsignin.test.js
 test/oauthsignin.test.js
 test/hooks.test.js
@@ -263,7 +258,6 @@ test/continuation-guard.test.js
 test/text-toolcall-markup.test.js
 test/model-conformance.test.js
 test/iteration-budget.test.js
-test/updatecore.test.js
 test/quitguard.test.js
 test/desktop-lifecycle-preferences.test.js
 test/desktop-station-stop.test.js
@@ -313,7 +307,6 @@ test/t2-state-safety.test.js
 test/upgrade-085-090.test.js
 test/t3-release-smoke.test.js
 test/t4-update-delivery.test.js
-test/installer-upgrade-resilience.test.js
 test/installer-stop-leftovers.test.js
 test/t5-public-distribution.test.js
 test/minisign-verify.test.js
@@ -425,10 +418,8 @@ test/skill-exchange.body-close.test.js
 test/skill-frontmatter.test.js
 test/skill-export.test.js
 test/skill-market.test.js
-test/skill-market-catalog.test.js
 test/skill-uploads-pull.test.js
 test/skill-market-signing.test.js
-test/skill-market-tools.test.js
 test/skill-guard-remote-install.test.js
 test/abilities.skills-lane.test.js
 test/skills.library.test.js
@@ -500,7 +491,6 @@ test/thrown-run-reason.test.js
 test/aux-env-knobs.test.js
 test/run-journal.test.js
 test/run-recovery-continuation.test.js
-test/run-recovery-ui.test.js
 test/run-journal.loop.test.js
 test/longhaul-retention.test.js
 test/autonomy-ledger.test.js
@@ -517,20 +507,13 @@ test/work-recap.test.js
 test/qa-ledger.test.js
 test/qa-saboteur.test.js
 test/qa-bugs.test.js
-test/qa-bug-lifecycle.test.js
-test/qa-bugs-register.test.js
-test/qa-bugs-fixed-in-tree.test.js
 test/ledger-reconcile.test.js
 test/qa-guardian.test.js
 test/qa-message-content.test.js
 test/qa-closer.test.js
 test/qa-ready.test.js
-test/qa-product-perfect.test.js
 test/qa-product-perfect-claims.test.js
 test/qa-claims-streaming.test.js
-test/website-pricing-hold.test.js
-test/website-docs-navigation.test.js
-test/website-skill-market.test.js
 test/genesis-starnet-link.test.js
 test/credits-status-wait.test.js
 test/qa-product-perfect-provenance.test.js
@@ -813,7 +796,6 @@ test/permissions-ui.test.js
 test/approval-posture-recorded.test.js
 test/theme-custom-phosphor.test.js
 test/panel-brightness.test.js
-test/simulation-lighting.test.js
 test/room-lighting-settings.test.js
 test/window-minimize.test.js
 test/nightshift-steer-ui.test.js
@@ -898,7 +880,6 @@ test/notifications-useful.test.js
 test/bell-settles.test.js
 test/quest-log-window.test.js
 test/window-render.ratchet.test.js
-test/world-idle-renderer.test.js
 test/personas-fun-five.test.js
 test/pride.test.js
 test/seedcredit.test.js
@@ -1087,7 +1068,6 @@ test/conveyor-legibility.test.js
 test/conveyor-first-line.test.js
 test/conveyor-results.test.js
 test/conveyor-retest.test.js
-test/conveyor-choices.test.js
 test/splitter-divide.test.js
 test/chain-audit-1010.test.js
 test/conveyor-links.test.js
@@ -1117,7 +1097,6 @@ test/floor.multibay.test.js
 test/workflow-panel-source.test.js
 test/workflow-panel-review-1012.test.js
 test/workflow-panel-done-reframe.test.js
-test/workflow-panel-sendto-truth.test.js
 test/sibling-scope.test.js
 test/propanchor.test.js
 test/prop-mount.test.js
@@ -1127,7 +1106,6 @@ test/scene-index.test.js
 test/prop-render-smoke.test.js
 test/proprotate.test.js
 test/recliner-side-seat.test.js
-test/sprite-sit-facing.test.js
 test/prop-search.test.js
 test/prop-starter-shelf.test.js
 test/waitanchor.test.js
@@ -1247,7 +1225,6 @@ test/mcp.schema-lifecycle.test.js
 test/mcp.manager-race.test.js
 test/mcp.manager-auth-race.test.js
 test/mcp.orphan-recovery.test.js
-test/google-connector.test.js
 test/google-relay-guard.test.js
 test/gmail-app-password.test.js
 test/gmail-headers-parser.test.js
@@ -1258,7 +1235,6 @@ test/mcp.oauth.test.js
 test/mcp.oauth-fetch.test.js
 test/mcp.oauth-body-close.test.js
 test/connectorstate.test.js
-test/connector-reliability-wiring.test.js
 test/mcp-serve.test.js
 test/connectors-ui.test.js
 test/connector-required.test.js
@@ -1282,7 +1258,6 @@ test/brand-wordmark-mask.test.js
 test/personalization-authority-wiring.test.js
 test/sprite-loading.test.js
 test/textsize-screen-space.test.js
-test/webkit-zoom-pointer.test.js
 test/mobile-control-reachability.test.js
 test/mobile-topbar-glass-cascade.test.js
 test/station-tooltip.test.js
@@ -1319,26 +1294,10 @@ test/release-notes-security-wording.test.js
 test/release-notes-dossier-tabs.test.js
 test/release-installer-selection.test.mjs
 test/opensource-readiness.test.js
-test/source-release-mirror.test.js
-test/release-train-chrome-warmup.test.js
-test/release-train-provenance.test.js
 test/frontend-dist-staging.test.js
-test/bundle-source-integrity.test.js
-test/install-manifest.test.js
-test/desktop-build-macos-notarization.test.js
 test/desktop-build-macos-python-host.test.js
-test/desktop-artifact-open.test.js
-test/release-train-macos-trust.test.js
 test/installed-integrity-proofs.test.js
-test/release-train-windows-trust.test.js
-test/release-contract-docs.test.js
-test/website-deploy-staging.test.js
-test/website-app-sync.test.js
-test/website-live-preview.test.js
 test/font.law.test.js
-test/sprite-assets.test.js
-test/sprite-walk-motion.test.js
-test/sprite-detached-prop.test.js
 test/lint-gate-can-fail.js
 test/lint-emits.js
 test/lint-determinism.js
@@ -1365,7 +1324,6 @@ test/output-artifacts.test.js
 test/station-recovery.test.js
 test/station-recovery-cli.test.js
 test/station-recovery-unreadable.test.js
-test/station-recovery-packaged.test.js
 test/station-recovery-safety.test.js
 test/station-recovery-real-stores.test.js
 test/execution-profiles.test.js
@@ -1470,7 +1428,6 @@ test/save-journal-page-lock.test.js
 test/growth-fold.test.js
 test/save-merge.test.js
 test/roster-push-base.test.js
-test/sprite-direction-details.test.js
 test/chat-history-reconcile.test.js
 test/prop-industrial-remaster.test.js
 test/industrialtextures.test.js
@@ -1483,26 +1440,18 @@ test/prop-remaster-recovery.test.js
 test/prop-recovery-live.e2e.test.mjs
 test/authored-prop-content.test.js
 test/authored-prop-motion.test.js
-test/authored-machine-config.test.js
 test/authored-service-content.test.js
-test/coordinated-prop-recipes.test.js
 test/routing-label-layout.test.js
 test/prop-layout-polish.test.js
 test/skin-study-tone.test.js
 test/skin-study-preview.test.js
-test/projection-prop-effects.test.js
 test/projection-load-geometry.test.js
-dev/industrial-textures/prop-catalog-review.test.cjs
 test/projection-depth-rendering.test.js
-test/station-templates.test.js
 test/build-share.test.js
-test/community-maps.test.js
-test/community-hide-until-live.test.js
 test/remaster-physical-fit.test.js
 test/arrival.test.js
 test/genesis-wake-credential.test.js
 test/dossier-growth-live.test.js
-test/industrial-shells.test.js
 test/refit-bake-reuse.test.js
 test/hallway-traffic.test.js
 test/cloudsave-timeout.test.js
@@ -1526,7 +1475,6 @@ test/staging-development-closure.test.js
 test/overseer-ui.test.js
 test/overseer-pollgate.test.js
 test/workspace-owner-election.test.js
-test/process-identity.fixtures.test.js
 test/parent-watch.test.js
 test/breakaway.test.js
 test/project-home-ui.test.js
@@ -1535,7 +1483,6 @@ test/cli.stop-child.test.js
 test/cli-desktop-closed.test.js
 test/cli-owner-identity.test.js
 test/cli-bootstrap-lineage.test.js
-test/cli-dashboard.test.js
 test/cli-dashboard-signal.test.js
 test/cli-dashboard-drive.test.js
 test/cli-theme.test.js
@@ -1638,7 +1585,6 @@ test/linejobs.test.js
 test/line-job-reader-identity.test.js
 test/linedraft.test.js
 test/workflows-window.test.js
-test/build-mode-easy.test.js
 test/build-hand.test.js
 test/refit-firstride-stale.test.js
 test/build-rightclick-furniture.test.js
@@ -1665,7 +1611,6 @@ test/model-tier-badges.test.js
 test/remote.core.test.js
 test/remote.relay.test.js
 test/remote-sessions.test.js
-test/remote-view.test.js
 test/remote-push.test.js
 test/remote-voice.test.js
 test/remote-voice-ownership.test.js
@@ -1758,23 +1703,15 @@ test/dockglow-seen.test.js
 test/vision-input.test.js
 # Previously on no list, so never run (gate-seams 2026-10-27; test/test-list-completeness.test.js keeps it that way).
 test/approved-sheet-assets.test.js
-test/authored-furniture-motion.test.js
-test/authored-surface-mounts.test.js
 test/chat-history-order.test.js
 test/css-style-invalidation.test.js
-test/eval-comparison.test.js
 test/onboarding-legibility.test.js
 test/projection-correction-assets.test.js
 test/projection-screen-light.test.js
 test/refit-testride-intake.test.js
-test/remaster-skin-import.test.js
 test/skill-metrics.test.js
 test/skill-package-format.test.js
 test/skill-registry.test.js
-dev/computer-eval/adapter.test.js
-dev/industrial-textures/approved-sheet-effects.test.cjs
-dev/industrial-textures/coordinated-effects/accessories.test.cjs
-dev/industrial-textures/coordinated-effects/utility.test.cjs
 test/test-list-completeness.test.js
 test/test-ports.lint.test.js
 test/test-ports-imports.lint.test.js

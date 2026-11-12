@@ -111,7 +111,7 @@ async function call(m, url, body) {
     A.eq((await call('POST', '/api/trading/broker/oanda/connect', { token: 't', accountId: '101-001-1234567-001' })).statusCode, 403, 'Alberta: locked');
 
     // ---- how index.js mounts it (source locks) ----
-    const idx = fs.readFileSync(path.join(__dirname, '..', 'sidecar', 'index.js'), 'utf8');
+    const idx = require('./helpers/source.js').readSidecarSource();
     A.ok(/\.\.\.tradingDesk\.routes,/.test(idx), 'index.js mounts the trading routes in ROUTES (behind the token gate)');
     A.ok(/dir: path\.join\(WORKSPACES, 'trading'\)/.test(idx), 'trading state lives under the workspace');
     A.ok(/writeFile: \(file, data\) => writeFileDurable\(/.test(idx), 'and is written through the durable writer');

@@ -57,7 +57,7 @@ A.ok(/mc-term-grant/.test(panel), 'a routine holding a standing grant is visibly
 A.ok(/connected tools/.test(panel), 'the connector grant is described in plain language, not as "MCP"');
 
 // the mirror the website build serves must carry the same copy (website/app is GENERATED)
-const mirror = path.join(root, 'website', 'app', 'app', 'windows', 'routines.js');
+const mirror = path.join(root, 'frontend', 'app', 'windows', 'routines.js');
 if (fs.existsSync(mirror)) {
   A.ok(/off unless you grant them below/i.test(fs.readFileSync(mirror, 'utf8')), 'the generated website mirror carries the terminal-honesty copy');
 }

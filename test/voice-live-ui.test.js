@@ -583,6 +583,6 @@ function approvalFixture(opts = {}) {
     assert.ok(home.clicked === 0, 'a multi-select toggle is never pressed by voice');
     assert.ok(r2.handled && chip.clicked === 1, 'with no single-pick question open, chips answer as before');
   }
-  assert.equal(source, fs.readFileSync(path.join(root, 'website', 'app', 'app', 'voice-live.js'), 'utf8'), 'the website voice controller matches the desktop');
+  assert.equal(source, fs.readFileSync(path.join(root, 'frontend', 'app', 'voice-live.js'), 'utf8'), 'the website voice controller matches the desktop');
   console.log('voice-live-ui.test.js: ok (confirmed ownership, siblings, pause accounting, refusal, duplicate, inflight and call-generation controls)');
 })().catch(error => { console.error(error); process.exitCode = 1; });

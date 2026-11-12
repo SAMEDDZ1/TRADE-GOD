@@ -71,12 +71,12 @@ function linearRun(f, unit, count) {
   const bypass = [
     ['backslash', 'Saved at ' + WS + '\\alpha\\shots\\x.png.', 'Saved at [workspace]\\alpha\\shots\\x.png.'],
     ['forward slash', 'Saved at C:/Users/andro/AppData/Roaming/TradeGod/workspaces/alpha/shots/x.png', 'Saved at [workspace]/alpha/shots/x.png'],
-    ['lower case', 'saved at c:\\users\\andro\\appdata\\roaming\\starnet\\workspaces\\alpha\\x.png', 'saved at [workspace]\\alpha\\x.png'],
+    ['lower case', 'saved at c:\\users\\andro\\appdata\\roaming\\tradegod\\workspaces\\alpha\\x.png', 'saved at [workspace]\\alpha\\x.png'],
     ['JSON-escaped', '{"path":"C:\\\\Users\\\\andro\\\\AppData\\\\Roaming\\\\TradeGod\\\\workspaces\\\\alpha\\\\x.png"}', '{"path":"[workspace]\\\\alpha\\\\x.png"}'],
     ['file URL', 'open file:///C:/Users/andro/AppData/Roaming/TradeGod/workspaces/alpha/x.png', 'open file:///[workspace]/alpha/x.png'],
-    ['URL-encoded (was: sent as written)', 'C%3A%5CUsers%5Candro%5CAppData%5CRoaming%5CStarNet%5Cworkspaces%5Calpha%5Cx.png', '[workspace]%5Calpha%5Cx.png'],
+    ['URL-encoded (was: sent as written)', 'C%3A%5CUsers%5Candro%5CAppData%5CRoaming%5CTradeGod%5Cworkspaces%5Calpha%5Cx.png', '[workspace]%5Calpha%5Cx.png'],
     ['partly URL-encoded (was: sent)', 'file:///C:/Users/andro/AppData/Roaming/TradeGod/work%73paces/alpha/x.png', 'file:///[workspace]/alpha/x.png'],
-    ['lower-case hex, + for a space', 'c%3a%5cusers%5candro%5cappdata%5croaming%5cstarnet%5cworkspaces%2falpha', '[workspace]%2falpha'],
+    ['lower-case hex, + for a space', 'c%3a%5cusers%5candro%5cappdata%5croaming%5ctradegod%5cworkspaces%2falpha', '[workspace]%2falpha'],
     ['8.3 short form (was: sent)', 'C:\\Users\\andro\\AppData\\Roaming\\TradeGod\\WORKSP~1\\alpha\\x.png', '[workspace]\\alpha\\x.png'],
     ['8.3 hashed form (was: sent)', 'C:\\Users\\andro\\AppData\\Roaming\\TradeGod\\WO3F2A~1\\alpha\\x.png', '[workspace]\\alpha\\x.png'],
     ['\\\\?\\ prefix', '\\\\?\\C:\\Users\\andro\\AppData\\Roaming\\TradeGod\\workspaces\\alpha\\x.png', '\\\\?\\[workspace]\\alpha\\x.png'],
@@ -145,7 +145,7 @@ function linearRun(f, unit, count) {
       ['x//c/Users/andro/AppData/Roaming/TradeGod/workspaces//alpha', 'x[workspace]//alpha'],
       ['/mnt/c/Users/andro/AppData/Roaming/TradeGod/workspaces/', '[workspace]/'],
       ['file:///C:/Users/andro/AppData/Roaming/TradeGod/workspaces/a', 'file:///[workspace]/a'],
-      ['C%3A%5CUsers%5Candro%5CAppData%5CRoaming%5CStarNet%5Cworkspaces%5Ca', '[workspace]%5Ca'],
+      ['C%3A%5CUsers%5Candro%5CAppData%5CRoaming%5CTradeGod%5Cworkspaces%5Ca', '[workspace]%5Ca'],
       ['\\\\' + WS + '\\a', '\\\\[workspace]\\a'],
       // the separators after the root are no longer swallowed, so a second spelling right behind it is cut too
       [WS + '/c/Users/andro/AppData/Roaming/TradeGod/workspaces/b', '[workspace][workspace]/b']
@@ -153,7 +153,7 @@ function linearRun(f, unit, count) {
     // the length guard: a text longer than the long-text bound is scrubbed in windows that overlap by the longest
     // spelling, so a path across a window's edge is still cut whole and another folder there is still left alone
     const small = makeHostPathScrub({ fixed: [WS], prefixes: () => hostPathForms(WS, { realpath: (p) => p }), longText: 1000, chunk: 300 });
-    const rows = [WS + '\\alpha\\x.png', WS + '-old\\alpha', WS + '.bak', 'c%3a%5cusers%5candro%5cappdata%5croaming%5cstarnet%5cworkspaces%2fa', '/c/Users/andro/AppData/Roaming/TradeGod/workspaces', WS + '/'.repeat(40) + 'c/Users/andro'];
+    const rows = [WS + '\\alpha\\x.png', WS + '-old\\alpha', WS + '.bak', 'c%3a%5cusers%5candro%5cappdata%5croaming%5ctradegod%5cworkspaces%2fa', '/c/Users/andro/AppData/Roaming/TradeGod/workspaces', WS + '/'.repeat(40) + 'c/Users/andro'];
     const differ = [];
     for (const row of rows) {
       for (let at = 200; at < 340; at++) {
@@ -179,7 +179,7 @@ function linearRun(f, unit, count) {
       HOME: '/c/Users/andro', SystemDrive: 'C:', HOMEDRIVE: 'C:', HOMEPATH: '\\Users\\andro', COMPUTERNAME: 'DESKTOP-7Q2K', TEMP: 'C:\\Users\\andro\\AppData\\Local\\Temp',
       ProgramData: 'C:\\ProgramData', Path: 'C:\\Windows;C:\\Users\\andro\\AppData\\Roaming', 'ProgramFiles(x86)': 'C:\\Program Files (x86)', '=C:': 'C:\\Users\\andro' };
     const sc = makeHostPathScrub({ fixed: [WS], prefixes: () => hostPathForms(WS, { realpath: (p) => p, env }), env });
-    const segs = ['C:', 'Users', 'andro', 'AppData', 'Roaming', 'TRADE GOD', 'workspaces'];
+    const segs = ['C:', 'Users', 'andro', 'AppData', 'Roaming', 'TradeGod', 'workspaces'];
     const j = (...a) => a.join('\\');
     const rows = [];
     // the separators a localized Windows SHOWS for '\' (the yen sign on a Japanese code page, the won sign on a Korean
@@ -189,27 +189,27 @@ function linearRun(f, unit, count) {
     }
     rows.push(
       // the machine's own admin share, and the drive segment as ':' / '$' / '|' (written or encoded)
-      ['admin share \\\\localhost\\c$', j('', '', 'localhost', 'c$', 'Users', 'andro', 'AppData', 'Roaming', 'TRADE GOD', 'workspaces', 'alpha', 'x.png'), '[workspace]\\alpha\\x.png'],
-      ['admin share \\\\127.0.0.1\\C$', j('', '', '127.0.0.1', 'C$', 'Users', 'andro', 'AppData', 'Roaming', 'TRADE GOD', 'workspaces', 'alpha'), '[workspace]\\alpha'],
-      ['admin share by the machine name', j('', '', 'desktop-7q2k', 'c$', 'Users', 'andro', 'AppData', 'Roaming', 'TRADE GOD', 'workspaces', 'a'), '[workspace]\\a'],
-      ['\\\\?\\UNC\\localhost\\c$', j('', '', '?', 'UNC', 'localhost', 'c$', 'Users', 'andro', 'AppData', 'Roaming', 'TRADE GOD', 'workspaces', 'a'), '\\\\?\\UNC[workspace]\\a'],
-      ['admin share, percent-encoded $', '%5C%5Clocalhost%5Cc%24%5CUsers%5Candro%5CAppData%5CRoaming%5CStarNet%5Cworkspaces%5Ca', '[workspace]%5Ca'],
+      ['admin share \\\\localhost\\c$', j('', '', 'localhost', 'c$', 'Users', 'andro', 'AppData', 'Roaming', 'TradeGod', 'workspaces', 'alpha', 'x.png'), '[workspace]\\alpha\\x.png'],
+      ['admin share \\\\127.0.0.1\\C$', j('', '', '127.0.0.1', 'C$', 'Users', 'andro', 'AppData', 'Roaming', 'TradeGod', 'workspaces', 'alpha'), '[workspace]\\alpha'],
+      ['admin share by the machine name', j('', '', 'desktop-7q2k', 'c$', 'Users', 'andro', 'AppData', 'Roaming', 'TradeGod', 'workspaces', 'a'), '[workspace]\\a'],
+      ['\\\\?\\UNC\\localhost\\c$', j('', '', '?', 'UNC', 'localhost', 'c$', 'Users', 'andro', 'AppData', 'Roaming', 'TradeGod', 'workspaces', 'a'), '\\\\?\\UNC[workspace]\\a'],
+      ['admin share, percent-encoded $', '%5C%5Clocalhost%5Cc%24%5CUsers%5Candro%5CAppData%5CRoaming%5CTradeGod%5Cworkspaces%5Ca', '[workspace]%5Ca'],
       ['file:///C| (the legacy pipe)', 'file:///C|/Users/andro/AppData/Roaming/TradeGod/workspaces/a', 'file:///[workspace]/a'],
       ['file:///C%7C', 'file:///C%7C/Users/andro/AppData/Roaming/TradeGod/workspaces/a', 'file:///[workspace]/a'],
       ['file:///%43: (an encoded drive letter)', 'file:///%43:/Users/andro/AppData/Roaming/TradeGod/workspaces/a', 'file:///[workspace]/a'],
       // the environment-variable and tilde forms of the variables that really prefix the root
-      ['%APPDATA%', j('%APPDATA%', 'TRADE GOD', 'workspaces', 'alpha', 'x.png'), '[workspace]\\alpha\\x.png'],
-      ['$env:APPDATA', j('$env:APPDATA', 'TRADE GOD', 'workspaces', 'alpha'), '[workspace]\\alpha'],
-      ['${env:APPDATA}', j('${env:APPDATA}', 'TRADE GOD', 'workspaces'), '[workspace]'],
+      ['%APPDATA%', j('%APPDATA%', 'TradeGod', 'workspaces', 'alpha', 'x.png'), '[workspace]\\alpha\\x.png'],
+      ['$env:APPDATA', j('$env:APPDATA', 'TradeGod', 'workspaces', 'alpha'), '[workspace]\\alpha'],
+      ['${env:APPDATA}', j('${env:APPDATA}', 'TradeGod', 'workspaces'), '[workspace]'],
       ['$APPDATA (a POSIX shell)', '$APPDATA/TradeGod/workspaces/alpha', '[workspace]/alpha'],
-      ['%USERPROFILE%', j('%USERPROFILE%', 'AppData', 'Roaming', 'TRADE GOD', 'workspaces', 'a'), '[workspace]\\a'],
-      ['%userprofile% in lower case', j('%userprofile%', 'appdata', 'roaming', 'starnet', 'workspaces', 'a'), '[workspace]\\a'],
+      ['%USERPROFILE%', j('%USERPROFILE%', 'AppData', 'Roaming', 'TradeGod', 'workspaces', 'a'), '[workspace]\\a'],
+      ['%userprofile% in lower case', j('%userprofile%', 'appdata', 'roaming', 'tradegod', 'workspaces', 'a'), '[workspace]\\a'],
       ['$HOME (Git Bash: /c/Users/andro)', '$HOME/AppData/Roaming/TradeGod/workspaces/alpha', '[workspace]/alpha'],
-      ['%HOMEDRIVE%%HOMEPATH%', j('%HOMEDRIVE%%HOMEPATH%', 'AppData', 'Roaming', 'TRADE GOD', 'workspaces', 'a'), '[workspace]\\a'],
-      ['%HOMEPATH% (drive-relative)', j('%HOMEPATH%', 'AppData', 'Roaming', 'TRADE GOD', 'workspaces', 'a'), '[workspace]\\a'],
-      ['%SystemDrive%', j('%SystemDrive%', 'Users', 'andro', 'AppData', 'Roaming', 'TRADE GOD', 'workspaces', 'a'), '[workspace]\\a'],
+      ['%HOMEDRIVE%%HOMEPATH%', j('%HOMEDRIVE%%HOMEPATH%', 'AppData', 'Roaming', 'TradeGod', 'workspaces', 'a'), '[workspace]\\a'],
+      ['%HOMEPATH% (drive-relative)', j('%HOMEPATH%', 'AppData', 'Roaming', 'TradeGod', 'workspaces', 'a'), '[workspace]\\a'],
+      ['%SystemDrive%', j('%SystemDrive%', 'Users', 'andro', 'AppData', 'Roaming', 'TradeGod', 'workspaces', 'a'), '[workspace]\\a'],
       ['~/ (the home folder)', 'Saved under ~/AppData/Roaming/TradeGod/workspaces/alpha/x.png', 'Saved under [workspace]/alpha/x.png'],
-      ['~\\ (the home folder)', j('~', 'AppData', 'Roaming', 'TRADE GOD', 'workspaces'), '[workspace]']
+      ['~\\ (the home folder)', j('~', 'AppData', 'Roaming', 'TradeGod', 'workspaces'), '[workspace]']
     );
     for (const [label, text, want] of rows) {
       const got = sc(text);
@@ -232,9 +232,9 @@ function linearRun(f, unit, count) {
       ['a URL with workspaces', 'https://github.com/org/repo/tree/main/workspaces/alpha and https://app.slack.com/workspaces'],
       ['yarn workspaces', 'run `yarn workspaces foreach run build`'],
       ['a relative path', 'see workspaces/alpha/x.png'],
-      ['another user', j('C:', 'Users', 'bob', 'AppData', 'Roaming', 'TRADE GOD', 'workspaces', 'a')],
-      ['another variable', j('%LOCALAPPDATA%', 'TRADE GOD', 'workspaces', 'alpha') + ' and ~/AppData/Local/TradeGod/workspaces'],
-      ['another share', j('', '', 'localhost', 'd$', 'Users', 'andro', 'AppData', 'Roaming', 'TRADE GOD', 'workspaces')],
+      ['another user', j('C:', 'Users', 'bob', 'AppData', 'Roaming', 'TradeGod', 'workspaces', 'a')],
+      ['another variable', j('%LOCALAPPDATA%', 'TradeGod', 'workspaces', 'alpha') + ' and ~/AppData/Local/TradeGod/workspaces'],
+      ['another share', j('', '', 'localhost', 'd$', 'Users', 'andro', 'AppData', 'Roaming', 'TradeGod', 'workspaces')],
       ['a price in yen and won', 'it costs ¥500 (₩6,000), and C:¥Users is a Japanese drive'],
       ['$env and tilde prose', 'set $env:Path, then cd ~/projects and run it; 50% of %USERPROFILE% users']
     ]) A.eq(sc(text), text, 'minor-3 forms leave alone: ' + label);
@@ -330,7 +330,7 @@ function linearRun(f, unit, count) {
       ['editMessage: an inline keyboard label', () => tg.editMessage('1', '7', 'pick', kb())],
       ['editMessage: a keyboard sent as a JSON string', () => tg.editMessage('1', '7', 'pick', { reply_markup: JSON.stringify(kb().reply_markup) })],
       ['sendMedia: the caption', () => tg.sendMedia('1', { kind: 'document', buffer: Buffer.from('x'), filename: 'x.txt', caption: 'saved ' + P })],
-      ['sendMedia: the file name', () => tg.sendMedia('1', { kind: 'document', buffer: Buffer.from('x'), filename: 'C%3A%5CUsers%5Candro%5CAppData%5CRoaming%5CStarNet%5Cworkspaces%5Cx.txt', caption: '' })],
+      ['sendMedia: the file name', () => tg.sendMedia('1', { kind: 'document', buffer: Buffer.from('x'), filename: 'C%3A%5CUsers%5Candro%5CAppData%5CRoaming%5CTradeGod%5Cworkspaces%5Cx.txt', caption: '' })],
       ['sendMedia: a keyboard under the file', () => tg.sendMedia('1', { kind: 'document', buffer: Buffer.from('x'), filename: 'x.txt' }, kb())],
       ['sendMediaGroup: the captions and file names', () => tg.sendMediaGroup('1', [{ kind: 'photo', buffer: Buffer.from('x'), filename: 'a.png', caption: 'saved ' + P }, { kind: 'photo', buffer: Buffer.from('y'), filename: WS + '\\b.png' }])],
       ['setShortDescription: the bot\'s status line', () => tg.setShortDescription('status ' + P)]

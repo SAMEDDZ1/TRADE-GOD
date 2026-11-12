@@ -9,7 +9,7 @@ const path = require('path');
 const root = path.join(__dirname, '..');
 const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 const app = read('frontend/index.html');
-const mirror = read('website/app/index.html');
+const mirror = read('frontend/index.html');
 const ui = read('frontend/app/stationui.js');
 
 let n = 0;

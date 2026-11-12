@@ -45,8 +45,8 @@ A.ok(/World\.setOnClick\(openWorldAgent\)/.test(appSrc), 'the world click callba
 A.ok(!/World\.setOnClick\([^\n]*openAgent\(0\)/.test(appSrc), 'the hard-coded Overseer dossier callback is gone');
 
 /* ---- 3. The shipped website mirror carries the exact same behavior. ---- */
-A.eq(readApp('website/app'), appSrc, 'website app.js mirrors the production frontend exactly');
-A.eq(readWorld('website/app'), worldSrc, 'website world.js mirrors the production frontend exactly');
+A.eq(readApp('frontend'), appSrc, 'website app.js mirrors the production frontend exactly');
+A.eq(readWorld('frontend'), worldSrc, 'website world.js mirrors the production frontend exactly');
 
 
 /* Curve regression: execute the real input conversion against independently projected

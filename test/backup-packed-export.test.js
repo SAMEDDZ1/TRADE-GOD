@@ -21,7 +21,7 @@ const Rig = require('./helpers/seal-rig.js');
 const { harnessApi } = require('./helpers/harness-api');
 const Store = require('../sidecar/transcriptstore.js'), History = require('../sidecar/transcript-history.js');
 
-const ROOTS = process.env.SEAL_CONTROL_ROOT ? ['control'] : ['frontend/app', 'website/app/app'];
+const ROOTS = process.env.SEAL_CONTROL_ROOT ? ['control'] : ['frontend/app', 'frontend/app'];
 const clone = Rig.clone;
 
 const mem = new Map();

@@ -48,7 +48,7 @@ async function exercise(source, wire, options = {}) {
 }
 
 (async () => {
-  for (const file of ['frontend/app/harness.js', 'website/app/app/harness.js']) {
+  for (const file of ['frontend/app/harness.js', 'frontend/app/harness.js']) {
     const source = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
     for (const bytewise of [false, true]) {
       const normal = await exercise(source, [start, token, end()].join('\n') + '\n', { bytewise });
@@ -96,7 +96,7 @@ async function exercise(source, wire, options = {}) {
   }
   // Execute the real COMMS failure branch: losing the response must retain the partial,
   // mark the run unsuccessful, and arm journal recovery even while another session is visible.
-  for (const file of ['frontend/app/chat.js', 'website/app/app/chat.js']) {
+  for (const file of ['frontend/app/chat.js', 'frontend/app/chat.js']) {
     const source = fs.readFileSync(path.join(__dirname, '..', file), 'utf8').replace(/\r\n/g, '\n');
     const marker = '    } catch (e) {\n      const aborted';
     const first = source.indexOf(marker), last = source.indexOf('    } finally {\n      aborters.delete', first);

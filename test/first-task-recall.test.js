@@ -50,7 +50,7 @@ const { PitchStore } = require('../frontend/app/pitchstore.js');
     const src = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'app', 'chat.js'), 'utf8');
     const ret = src.lastIndexOf('return { init, load, paintTitle');
     A.ok(ret > 0 && /\brememberSent: recordSent\b/.test(src.slice(ret, src.indexOf('})();', ret))), 'Chat exports rememberSent as the composer\'s own recordSent');
-    const web = fs.readFileSync(path.join(__dirname, '..', 'website', 'app', 'app', 'chat.js'), 'utf8');
+    const web = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'app', 'chat.js'), 'utf8');
     A.ok(/\brememberSent: recordSent\b/.test(web), 'the website mirror carries it too');
   }
 

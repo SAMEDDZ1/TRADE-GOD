@@ -45,7 +45,8 @@ function defaults() {
 function createService(deps) {
   const { fs, path, dir } = deps;
   const now = deps.now || (() => Date.now());
-  const write = deps.writeFile || ((file, data) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, data, { mode: 0o600 }); });
+  // the host passes its durable writer; standalone (tests, the preview) uses persist's atomic temp + fsync + rename
+  const write = deps.writeFile || ((file, data) => require('../persist/write.js').writeAtomic({ fs, path, mode: 0o600 }, file, data));
   const F = name => path.join(dir, name);
   function readJson(name, fallback) {
     try { return JSON.parse(fs.readFileSync(F(name), 'utf8')); }

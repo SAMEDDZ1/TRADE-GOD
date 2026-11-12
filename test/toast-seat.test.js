@@ -27,8 +27,8 @@ const root = path.resolve(__dirname, '..');
 const read = (...p) => fs.readFileSync(path.join(root, ...p), 'utf8');
 const motion = read('frontend', 'css', 'motion.css');
 const ui = read('frontend', 'app', 'stationui.js');
-const motionMirror = read('website', 'app', 'css', 'motion.css');
-const uiMirror = read('website', 'app', 'app', 'stationui.js');
+const motionMirror = read('frontend', 'css', 'motion.css');
+const uiMirror = read('frontend', 'app', 'stationui.js');
 
 // pull the #toast-stack rule body out of the sheet by exact selector
 function ruleFor(css, selector) {

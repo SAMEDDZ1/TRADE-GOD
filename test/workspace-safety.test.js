@@ -12,7 +12,7 @@ const winDeps = {
   env: { LOCALAPPDATA: 'C:\\Users\\Ada\\AppData\\Local', APPDATA: 'C:\\Users\\Ada\\AppData\\Roaming' },
   homedir: () => 'C:\\Users\\Ada'
 };
-A.eq(classifyWorkspace('c:\\users\\ada\\appdata\\local\\STARNET\\workspaces\\', winDeps).protected, true,
+A.eq(classifyWorkspace('c:\\users\\ada\\appdata\\local\\TRADEGOD\\workspaces\\', winDeps).protected, true,
   'current Windows root is protected case-insensitively');
 A.eq(classifyWorkspace('C:\\Users\\Ada\\AppData\\Roaming\\Skynet\\workspaces', winDeps).protected, true,
   'legacy rename root is protected');

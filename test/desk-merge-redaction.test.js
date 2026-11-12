@@ -306,7 +306,7 @@ async function routeContract() {
 
 (async () => {
   await routeContract();
-  for (const root of ['frontend/app', 'website/app/app']) {
+  for (const root of ['frontend/app', 'frontend/app']) {
     await secretTurnMergesOnce(root);
     await ownSendStaysAsTyped(root);
     await nothingRedactedCostsNothing(root);

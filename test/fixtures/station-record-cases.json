@@ -58,7 +58,7 @@
     { "name": "torn bytes", "raw": "{\"version\":1,\"acknow", "status": "torn" }
   ],
   "acknowledgesRule": [
-    { "platform": "win32", "acknowledged": "C:\\Users\\A\\AppData\\Local\\TradeGod\\workspaces", "root": "c:/users/a/appdata/local/starnet/workspaces", "same": true },
+    { "platform": "win32", "acknowledged": "C:\\Users\\A\\AppData\\Local\\TradeGod\\workspaces", "root": "c:/users/a/appdata/local/tradegod/workspaces", "same": true },
     { "platform": "win32", "acknowledged": "C:\\Users\\A\\AppData\\Local\\TradeGod\\workspaces", "root": "C:\\Users\\A\\AppData\\Local\\TradeGod\\workspaces-other", "same": false },
     { "platform": "linux", "acknowledged": "/home/a/.local/share/TradeGod/workspaces", "root": "/home/a/.local/share/starnet/workspaces", "same": false },
     { "platform": "linux", "acknowledged": "/home/a/x/../.local/share/TradeGod/workspaces", "root": "/home/a/.local/share/TradeGod/workspaces", "same": true },

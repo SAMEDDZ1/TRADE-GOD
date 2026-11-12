@@ -28,13 +28,9 @@ const SIDE_LISTS = ['test/slow.list', 'test/flaky.list', 'test/customer-journeys
 /* A file here is a known, explained exception — not a place to park a test that is inconvenient. Fix it and gate it. */
 const UNGATED = {
   'test/kepler-showcase.test.js':
-    'RED since 45fd0b096 (2026-09-16, "synchronize station before seating integration"): in the Kepler Relay preset the ' +
-    'fabrication room is walkable but no longer reachable from command. The preset (dev/kepler-showcase.cjs, shipped ' +
-    'as frontend/app/kepler-showcase.js) or the test needs fixing; then gate it on test/fast.list. Tracked as ' +
-    'qa/bugs/48b6ecac-kepler-relay-preset-the-fabrication-room-is-walk.md.',
-  'dev/industrial-textures/projection-effects-pixels.test.cjs':
-    'A QA raster generator, not a regression step: every run rewrites docs/station-remaster/projection-effects/' +
-    'state-pixels.png and pixel-checks.json in the working tree, and its canvas fallback is a path on one machine.'
+    'RED since 45fd0b096 (2026-09-16, inherited from StarNet): in the Kepler Relay preset the fabrication room is walkable ' +
+    'but no longer reachable from command. The preset (dev/kepler-showcase.cjs, shipped as frontend/app/kepler-showcase.js) ' +
+    'or the test needs fixing; then gate it on test/fast.list.'
 };
 
 const readLines = rel => fs.readFileSync(path.join(ROOT, rel), 'utf8').replace(/^﻿/, '').split(/\r?\n/)

@@ -63,7 +63,7 @@ A.ok(/providerVerified:\s*true/.test(sidecar) && /j\.providerVerified/.test(ui),
 A.ok(/runReady:[\s\S]*?runDetail:/.test(sidecar) && /runBlocked[\s\S]*?replies blocked/.test(ui),
   'a saved bot whose bound agent cannot run is visibly reply-blocked even when Telegram polling works');
 
-const mirror = fs.readFileSync(path.join(root, 'website', 'app', 'app', 'windows', 'messaging.js'), 'utf8');
+const mirror = fs.readFileSync(path.join(root, 'frontend', 'app', 'windows', 'messaging.js'), 'utf8');
 A.ok(mirror.includes('POLLING — DMs BLOCKED: PAIR OWNER') && /j\.pairingCode/.test(mirror),
   'the generated website app mirror carries the same pairing truth');
 

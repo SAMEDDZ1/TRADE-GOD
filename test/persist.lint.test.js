@@ -225,6 +225,7 @@ const BASELINE = {
   'tools/builtin/plugin-author.js': [4, "agent jail: plugin authoring files and the staged plugin's activation rename"],
   'tools/builtin/resolve.js': [1, 'agent jail: a built Resolve timeline file'],
   'tools/builtin/voice.js': [1, 'agent jail: synthesized audio'],
+  'trading/journal.js': [1, 'append-only journal: the hash-chained trade journal, one sealed line per event (verify() catches a torn or edited line)'],
   'userprops.js': [2, 'own writer (userprops), not on persist yet: the fallback writer when no writeDurable is injected'],
   'workspace-owner.js': [1, 'lock protocol: the atomic rename is the owner-lock reclaim'],
   'workspace-recovery.js': [9, 'generation protocol: stage copy, activation/rollback and failed-request renames (7), fresh/recovered migration seals (2)']

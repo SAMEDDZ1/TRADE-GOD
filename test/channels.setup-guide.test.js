@@ -41,7 +41,7 @@ A.ok(/dataset\.foldWired/.test(ui), 'the summary listener is installed once, not
 
 // ---- D. website/app is a generated mirror and must carry the same fix ----
 {
-  const mirror = path.join(root, 'website', 'app', 'app', 'windows', 'messaging.js');
+  const mirror = path.join(root, 'frontend', 'app', 'windows', 'messaging.js');
   const m = fs.readFileSync(mirror, 'utf8');
   A.ok(/<details class="ch-setup" open data-autofold="1">/.test(m),
     'the website/app mirror carries the open SETUP GUIDE (run npm run sync:website)');

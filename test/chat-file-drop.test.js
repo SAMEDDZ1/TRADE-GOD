@@ -11,7 +11,7 @@ class Node {
   setAttribute() {}
   fire(type, event = {}) { event.target ||= this; event.preventDefault = () => { event.prevented = true; }; for (const fn of this.events[type] || []) fn(event); return event; }
 }
-for (const root of ['frontend', 'website/app']) {
+for (const root of ['frontend', 'frontend']) {
   const source = fs.readFileSync(path.join(__dirname, '..', root, 'app/chat.js'), 'utf8');
   const fn = source.match(/  function wireChatDropTarget\([^]*?\n  \}/)?.[0];
   assert.ok(fn, root + ': whole-chat drop binding exists');

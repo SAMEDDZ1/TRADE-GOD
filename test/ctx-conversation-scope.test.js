@@ -179,7 +179,7 @@ A.eq(afterReload.used, 13200 - CtxGauge.estimateMessages(CHAT_A) + CtxGauge.esti
 A.ok(store.size > 0, 'the calibration is actually written to storage, not just held in memory');
 
 /* 11. the web build ships the same panel — a fix in one copy is a fix half the users never get */
-const web = fs.readFileSync(path.join(__dirname, '..', 'website', 'app', 'app', 'harness.js'), 'utf8');
+const web = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'app', 'harness.js'), 'utf8');
 A.ok(web.indexOf('let contextByKey') >= 0, 'the website mirror carries the per-conversation keying too');
 A.ok(/function contextState\(agentId, streamId, messages\)/.test(web), 'the website mirror carries the conversation-scoped read too');
 

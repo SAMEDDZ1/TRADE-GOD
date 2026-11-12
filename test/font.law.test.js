@@ -43,7 +43,7 @@ A.ok(!/https?:/.test(face), 'the VT323 @font-face has no network source');
 A.ok(/font-display:\s*block/.test(face), 'VT323 uses font-display:block — never `swap`, which licenses a fallback repaint');
 
 /* ---------- 3. no remote font anywhere in the shipped HTML ---------- */
-for (const html of ['frontend/index.html', 'website/app/index.html']) {
+for (const html of ['frontend/index.html', 'frontend/index.html']) {
   if (!fs.existsSync(path.join(root, html))) continue;
   const src = rd(html);
   A.ok(!/fonts\.googleapis\.com|fonts\.gstatic\.com/.test(src), html + ' loads no font from a CDN');

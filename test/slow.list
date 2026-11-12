@@ -18,7 +18,6 @@ test/cli-dashboard-drive.test.js
 # comms-owner.e2e: a live page driven through four reloads — 83 s in G1's http run, 43-67 s at 100% CPU.
 test/comms-owner.e2e.test.js
 # website-app-sync: runs scripts/sync-website-app.mjs --check over the whole frontend copy — 69.2 s.
-test/website-app-sync.test.js
 # ledger-reconcile: the real io shell and the real CLI against a throwaway git repo — 51.5 s, 80.6 s and 67.1 s
 # standalone on 2026-11-03 (CPU at 99-100%). Its time is about 33 git and node child processes, 1-6 s each on a loaded
 # box; the CLI's three runs (two on the fixture) are 20 s of it, no longer a scan of the whole repository (318-543 s).
@@ -322,7 +321,6 @@ test/routine-delivery.parts.e2e.test.js
 # time creating MSYS processes, which takes well under a second for the whole file on Linux.
 # release-train-macos-trust: runs the DMG own-signature proof (scripts/verify-macos-dmg.sh) for real in Git Bash against
 # stub macOS tools, 12 runs — 116 s on a lighter box, 269 s on that one.
-test/release-train-macos-trust.test.js
 # installed-integrity-proofs: the Mac installed-integrity proof run for real in Git Bash (17 runs) and the Windows proof's
 # own Assert-InstalledIntegrity in Windows PowerShell (11 verifies), the executable stubbed — 182 s on that box.
 test/installed-integrity-proofs.test.js

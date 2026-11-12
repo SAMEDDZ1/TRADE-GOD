@@ -45,7 +45,7 @@ const { makeWebhookVerifier } = require('../sidecar/channels/webhook-auth.js');
   A.eq(auth.verify({ timestamp: ts, nonce: 'nonce_3234567890abcdef', signature: '0'.repeat(64), body }).code, 401, 'wrong HMAC is refused');
 
   const chat = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'app', 'chat.js'), 'utf8');
-  const mirror = fs.readFileSync(path.join(__dirname, '..', 'website', 'app', 'app', 'chat.js'), 'utf8');
+  const mirror = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'app', 'chat.js'), 'utf8');
   const index = readSidecarSource();
   A.ok(/TurnMerge\.reconcile\(/.test(chat) && /buckets\.get\(key\)/.test(require('./helpers/turnmerge').source()), 'desktop reconciliation is occurrence-aware');
   const mergeBody = require('./helpers/turnmerge').source('mergeCanonicalHistory');

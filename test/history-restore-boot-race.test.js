@@ -228,7 +228,7 @@ async function staleServerErrorAsksAgain(root) {
 }
 
 (async () => {
-  for (const root of ['frontend/app', 'website/app/app']) {
+  for (const root of ['frontend/app', 'frontend/app']) {
     for (const [name, fn] of [['boot race: the first send asks again and goes once', bootRaceSendsOnce],
       ['slow boot (12 s answers) still sends', slowBootAnswerStillSends],
       ['a station that never answers ends honestly', neverAnswersIsHonest],

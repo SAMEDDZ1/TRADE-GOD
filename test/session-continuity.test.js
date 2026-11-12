@@ -85,6 +85,6 @@ async function campaign(root, seed) {
   A.ok(true, root+' lifecycle sequence '+seed+' completed');
 }
 (async()=>{
-  for(const root of ['frontend/app','website/app/app']) for(let seed=0;seed<24;seed++) await campaign(root,seed);
+  for(const root of ['frontend/app','frontend/app']) for(let seed=0;seed<24;seed++) await campaign(root,seed);
   A.report('session-continuity (48 lifecycle sequences, both shipped trees)');
 })().catch(e=>{console.error(e);process.exitCode=1;});

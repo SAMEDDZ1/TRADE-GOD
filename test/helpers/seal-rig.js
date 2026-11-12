@@ -11,7 +11,7 @@
    (hydrateHistory, reconcileServerHistory, ensureHistoryReady, the seal pass and the seal sweep's read) and app.js's idle passes
    (hydration and seal sweep) lifted by name, the way test/history-hydrate.seam.test.js lifts them.
 
-   `root` is the frontend tree the page is made of ('frontend/app' or 'website/app/app'); SEAL_CONTROL_ROOT names another tree (an
+   `root` is the frontend tree the page is made of ('frontend/app' or 'frontend/app'); SEAL_CONTROL_ROOT names another tree (an
    older build's files, for the RED proof of a test: node test/<file> with SEAL_CONTROL_ROOT=<dir holding that build's frontend/app *.js>). */
 const fs = require('node:fs'), path = require('node:path'), vm = require('node:vm'), crypto = require('node:crypto');
 const A = require('../_assert.js');

@@ -109,7 +109,7 @@ module.exports = (async () => {
   A.ok(/^Chat memory: 13000 \/ 200000 tokens used \(7%/.test(old), 'no runWindowOf (an older harness): the model window, as before: ' + old);
 
   // ---- 4. the website app ships the same ----
-  const webChat = read('website/app/app/chat.js'), webHarness = read('website/app/app/harness.js');
+  const webChat = read('frontend/app/chat.js'), webHarness = read('frontend/app/harness.js');
   A.ok(webChat.indexOf('Harness.runWindowOf(cs.model)') >= 0, 'the website chat.js mirror carries the /compress run window');
   A.ok(webHarness.indexOf('function runWindowOf(id)') >= 0 && webHarness.indexOf('runWindow: (m && +m.runWindow) || 0') >= 0, 'the website harness.js mirror carries runWindow');
   A.ok(webHarness.indexOf('function compactAtOf(id)') >= 0 && webHarness.indexOf('compactAt: (m && +m.compactAt > 0') >= 0, 'the website harness.js mirror carries compactAt');

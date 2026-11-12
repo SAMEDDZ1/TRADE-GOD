@@ -14,7 +14,7 @@ A.ok(/fn\s+legacy_workspace_paths\s*\(/.test(src), 'desktop launcher declares le
 A.ok(/target_os\s*=\s*"macos"[\s\S]{0,260}?Library[\s\S]{0,120}?Application Support/.test(src), 'desktop migration scans the native macOS Application Support shelf');
 A.ok(/home\.join\("\.local"\)\.join\("share"\)/.test(src), 'desktop migration scans the manual-sidecar POSIX shelf');
 A.ok(/valid_station_save_hash[\s\S]{0,5000}?distinct_saves\.len\(\)\s*>\s*1[\s\S]{0,800}?awaiting explicit Recovery Mode selection/.test(src), 'desktop migration refuses to merge distinct valid legacy stations');
-A.ok(/base\.join\("TRADE GOD"\)\.join\("workspaces"\)/.test(src), 'legacy TRADE GOD app-data workspace is considered');
+A.ok(/base\.join\("TradeGod"\)\.join\("workspaces"\)/.test(src), 'legacy TRADE GOD app-data workspace is considered');
 A.ok(/base\.join\("Skynet"\)\.join\("workspaces"\)/.test(src), 'legacy Skynet app-data workspace is considered');
 A.ok(/base\.join\("com\.tradegod\.app"\)\.join\("workspaces"\)/.test(src), 'identifier-based app-data workspace is considered');
 A.ok(/join\("sidecar"\)\.join\("workspaces"\)/.test(src), 'old install-sidecar workspace is considered');

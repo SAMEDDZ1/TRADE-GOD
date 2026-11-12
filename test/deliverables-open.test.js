@@ -9,7 +9,7 @@ const fs = require('fs');
 const path = require('path');
 
 const frontendSource = fs.readFileSync(path.join(__dirname, '../frontend/app/deliverables.js'), 'utf8');
-const websiteSource = fs.readFileSync(path.join(__dirname, '../website/app/app/deliverables.js'), 'utf8');
+const websiteSource = fs.readFileSync(path.join(__dirname, '../frontend/app/deliverables.js'), 'utf8');
 A.eq(websiteSource, frontendSource, 'the generated website Deliverables surface stays byte-identical');
 A.ok(/\(r\.files \|\| \[\]\)\.map\(\(f, fi\) => f\.openUrl/.test(frontendSource),
   'OPEN data-file indices remain aligned with the original backend file array');

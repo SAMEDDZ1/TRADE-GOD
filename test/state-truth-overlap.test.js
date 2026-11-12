@@ -46,7 +46,7 @@ A.ok(/const unhealthyChannels = new Set\(\)[\s\S]*?state === 'up'[\s\S]*?reconne
 A.ok(/const toastKey = String\(\(opts && opts\.key\)[\s\S]*?dataset\.toastKey === toastKey[\s\S]*?prior\.remove\(\)/.test(station),
   'keyed transient toasts remove the prior live-state card before rendering its replacement');
 
-A.eq(read('website/app/app/world.js'), world, 'website world mirror carries worker spawn truth exactly');
-A.eq(read('website/app/app/stationui.js'), station, 'website dossier mirror carries per-worker status truth exactly');
+A.eq(read('frontend/app/world.js'), world, 'website world mirror carries worker spawn truth exactly');
+A.eq(read('frontend/app/stationui.js'), station, 'website dossier mirror carries per-worker status truth exactly');
 
 A.report('state-truth-overlap');

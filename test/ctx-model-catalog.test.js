@@ -153,7 +153,7 @@ const ALL_PROVIDERS = ['openrouter', 'openai', 'anthropic', 'gemini', 'codex', '
   A.eq(api.contextLimitOf('claude-opus-5'), 200000, 'a provider ALIAS warms the canonical bucket, not a shadow one');
 
   /* 8. the web build ships the same panel — a fix in one copy is a fix half the users never get */
-  const web = fs.readFileSync(path.join(__dirname, '..', 'website', 'app', 'app', 'harness.js'), 'utf8');
+  const web = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'app', 'harness.js'), 'utf8');
   A.eq(web.indexOf('let modelsByProv') >= 0, true, 'the website mirror carries the per-provider catalog too');
   A.eq(/function catalogModel/.test(web), true, 'the website mirror carries the catalogModel resolver too');
 

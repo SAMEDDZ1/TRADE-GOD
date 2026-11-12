@@ -8,7 +8,7 @@
 const path = require('node:path');
 const A = require('./_assert.js');
 
-for (const root of ['frontend/app', 'website/app/app']) {
+for (const root of ['frontend/app', 'frontend/app']) {
   globalThis.HistoryRef = require(path.join(__dirname, '..', root, 'historyref.js'));
   const W = require(path.join(__dirname, '..', root, 'workstreams.js'));
   const img = { id: 'a', name: 'passport.jpg', path: '.attachments/11111111-1111-4111-8111-111111111111.jpg', mediaType: 'image/jpeg', kind: 'image' };

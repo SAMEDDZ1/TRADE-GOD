@@ -143,7 +143,7 @@ A.ok(/Chat\.refreshIdBar\(\)/.test(setAgentModelPinSrc), 'the dossier model pin 
 
 // Execute the actual dossier handlers: a dropdown clear must not fall back to the
 // old pin in the collapsed advanced fields (v0.12.4 BYOK delegation escape).
-for (const file of ['frontend/app/stationui.js', 'website/app/app/stationui.js']) {
+for (const file of ['frontend/app/stationui.js', 'frontend/app/stationui.js']) {
   const source = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
   const start = source.indexOf("    const mSave = body.querySelector('#ag-model-save');");
   const end = source.indexOf('    // PERSONALITY chips', start);
@@ -178,7 +178,7 @@ for (const file of ['frontend/app/stationui.js', 'website/app/app/stationui.js']
   const button = dossier(); button.nodes['#ag-model-clear'].listeners.click();
   A.eq(JSON.stringify(button.saves[0]), JSON.stringify(['worker', '', '', '']), file + ': dedicated clear button clears the same identity');
 }
-for (const file of ['frontend/app/app.js', 'website/app/app/app.js']) {
+for (const file of ['frontend/app/app.js', 'frontend/app/app.js']) {
   const source = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
   const restore = source.match(/function rehydrateRoster\(savedAgents\) \{[\s\S]*?\n  \}/)[0];
   const agents = new Map();

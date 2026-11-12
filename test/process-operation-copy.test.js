@@ -80,7 +80,7 @@ for (const tool of ALL) {
 }
 
 // ---- the packaged website mirror carries the same words (npm run sync:website) ----
-const mirror = path.join(__dirname, '..', 'website', 'app', 'app', 'chat.js');
+const mirror = path.join(__dirname, '..', 'frontend', 'app', 'chat.js');
 if (fs.existsSync(mirror)) {
   const m = fs.readFileSync(mirror, 'utf8').replace(/\r\n/g, '\n');
   A.eq(chatFunction(m, 'processOperation'), chatFunction(chatSrc, 'processOperation'), 'the website mirror has the same operation table');

@@ -32,7 +32,7 @@ const { readSidecarSource } = require('./helpers/source');
 const { harnessApi, answer } = require('./helpers/harness-api');
 const Store = require('../sidecar/transcriptstore.js'), History = require('../sidecar/transcript-history.js'), Dual = require('../sidecar/turn-dual.js');
 
-const ROOTS = ['frontend/app', 'website/app/app'];
+const ROOTS = ['frontend/app', 'frontend/app'];
 const clone = v => JSON.parse(JSON.stringify(v));
 const deepEq = (a, b, msg) => { try { assert.deepStrictEqual(a, b); A.ok(true); } catch (e) { A.ok(false, msg + ' — ' + String(e.message).split('\n').slice(0, 6).join(' | ')); } };
 const flush = async () => { for (let i = 0; i < 40; i++) await new Promise(r => setImmediate(r)); };

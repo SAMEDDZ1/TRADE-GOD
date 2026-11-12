@@ -20,7 +20,7 @@ const Rig = require('./helpers/seal-rig.js');
 const { TurnFixture } = require('./helpers/turn-fixture.js');
 const Store = require('../sidecar/transcriptstore.js'), History = require('../sidecar/transcript-history.js');
 
-const ROOTS = process.env.SEAL_CONTROL_ROOT ? ['control'] : ['frontend/app', 'website/app/app'];
+const ROOTS = process.env.SEAL_CONTROL_ROOT ? ['control'] : ['frontend/app', 'frontend/app'];
 const clone = Rig.clone;
 const sid = i => 'q' + String(i).padStart(3, '0');
 

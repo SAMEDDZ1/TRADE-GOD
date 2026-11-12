@@ -12,7 +12,7 @@ const fs = require('node:fs'), path = require('node:path'), vm = require('node:v
 const assert = require('node:assert/strict');
 const A = require('./_assert.js');
 
-const ROOTS = ['frontend/app', 'website/app/app'];
+const ROOTS = ['frontend/app', 'frontend/app'];
 const unread = () => [{ $ref: '1,1' }];                       // rows 1 and 2 named, none held
 const record = (id, extra) => Object.assign({ id, title: 'session ' + id, kind: 'chat', agentId: 'agent', history: unread(), runIds: [], createdAt: 1, lastActiveAt: 1, lastReadAt: 1 }, extra || null);
 

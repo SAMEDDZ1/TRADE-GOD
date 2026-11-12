@@ -13203,7 +13203,7 @@ async function handleRemoteRevoke(req, res) {
   respondJson(res, 200, remoteSnapshot());
 }
 
-// TRADE GOD — the trading desk (sidecar/trading/*): paper account, risk engine, Trading Council tickets, Agent Coach,
+// TRADE GOD — the trading desk (sidecar/trading): paper account, risk engine, Trading Council tickets, Agent Coach,
 // scorecards, journal, backtester, TradingView alerts and the OANDA practice connector. Its state lives under
 // WORKSPACES/trading and is written through the same durable writer as every other protected store.
 const { makeTradingRoutes } = require('./trading/routes.js');
@@ -13216,7 +13216,7 @@ const TRADING_TV_HOOK = '/api/trading/tv-webhook';
 const tradingTvHookRoute = tradingDesk.routes.find(r => r.exact === TRADING_TV_HOOK);
 
 const ROUTES = [
-  ...tradingDesk.routes,            // TRADE GOD: /api/trading/* (sidecar/trading/routes.js)
+  ...tradingDesk.routes,            // TRADE GOD: the /api/trading routes (sidecar/trading/routes.js)
   { m: 'GET', qsplit: '/api/groups', h: handleGroups },
   { m: 'POST', exact: '/api/groups', h: handleGroups },
   { m: 'POST', exact: '/api/update/prepare', h: handleUpdatePrepare },

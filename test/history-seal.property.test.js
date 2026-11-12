@@ -24,7 +24,7 @@ const A = require('./_assert.js');
 const Rig = require('./helpers/seal-rig.js');
 const { TurnFixture } = require('./helpers/turn-fixture.js');
 
-const ROOTS = process.env.SEAL_CONTROL_ROOT ? ['control'] : ['frontend/app', 'website/app/app'];
+const ROOTS = process.env.SEAL_CONTROL_ROOT ? ['control'] : ['frontend/app', 'frontend/app'];
 const SEEDS = Math.max(1, Math.min(400, Number(process.env.HISTORY_SEAL_SEEDS) || 24));
 const STEPS = Math.max(10, Math.min(300, Number(process.env.HISTORY_SEAL_STEPS) || 50));
 const FIRST_SEED = Number(process.env.HISTORY_SEAL_SEED) || 20261104;

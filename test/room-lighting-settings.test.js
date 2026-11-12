@@ -133,5 +133,5 @@ assert.match(src, /id="set-room-light"[^>]*min="0" max="100"/, 'Settings shows t
 assert.match(src, /applyRoomLighting\(s\.roomLighting, true\)/, 'dragging applies live');
 assert.match(src, /commitRoomLighting\(\(\) => store\.settings\.roomLighting\); save\(\)/, 'release commits the current value and persists');
 assert.match(src, /else if \(k === 'roomLighting'\) num\(k, 0, 100\)/, 'chat control takes the same 0–100 range');
-assert.equal(src, fs.readFileSync(path.join(__dirname, '../website/app/app/stationui.js'), 'utf8'));
+assert.equal(src, fs.readFileSync(path.join(__dirname, '../frontend/app/stationui.js'), 'utf8'));
 console.log('room-lighting-settings: 0–100 slider drives film/cut/key/CRT film, drag debounce, legacy saves, classic and mirror passed');

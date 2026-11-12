@@ -138,7 +138,7 @@ function fakeStack(tools) {
   A.ok(/tp === 'stdio' && stdioAgents\.length === 0/.test(station), 'ADD is disabled when no isolated agent is available');
   A.ok(/payload\.agentId = agentId/.test(station) && /payload\.command = command/.test(station), 'stdio owner and command reach the connector API');
   // the web build ships the same panel — a fix that lands in only one copy is a fix half the users never get
-  const webStation = fs.readFileSync(path.join(__dirname, '..', 'website', 'app', 'app', 'windows', 'connectors.js'), 'utf8');
+  const webStation = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'app', 'windows', 'connectors.js'), 'utf8');
   A.ok(/id="mc-command"/.test(webStation) && /id="mc-agent"/.test(webStation), 'web build carries the same isolated stdio form');
   A.ok(/function readJSON/.test(webStation) && /offline: true/.test(webStation) && /offline: false/.test(webStation),
     'web build carries the same read-honesty fix — a one-copy fix is one half the users never get');

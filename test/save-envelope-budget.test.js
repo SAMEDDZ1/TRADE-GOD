@@ -24,7 +24,7 @@ const Rig = require('./helpers/seal-rig.js');
 const Kit = require('./_save-restore-kit.js');
 const Store = require('../sidecar/transcriptstore.js'), History = require('../sidecar/transcript-history.js');
 
-const ROOTS = process.env.SEAL_CONTROL_ROOT ? ['control'] : ['frontend/app', 'website/app/app'];
+const ROOTS = process.env.SEAL_CONTROL_ROOT ? ['control'] : ['frontend/app', 'frontend/app'];
 const MiB = 1048576;
 const BASE_TS = 1700000000000;
 const sid = i => 's' + String(i).padStart(5, '0');
