@@ -9,9 +9,12 @@ You need **Node.js 22** (https://nodejs.org) and **Git**.
 ```bash
 git clone https://github.com/SAMEDDZ1/TRADE-GOD.git
 cd TRADE-GOD
-npm ci
+npm ci --omit=optional --omit=dev
 npm start
 ```
+
+`--omit=optional` skips the offline speech engine (about 1 GB); drop it if you want voice that works without the
+internet. `--omit=dev` skips the tools for building the installer and running the tests.
 
 Open **http://127.0.0.1:8787** in Chrome or Edge. The TRADING DESK opens by itself once the station is up.
 

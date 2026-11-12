@@ -109,7 +109,7 @@ Connect an OANDA practice account for real forex/metals/index prices, or import 
 ## Run from source
 
 ```bash
-npm ci
+npm ci --omit=optional --omit=dev
 npm start          # http://127.0.0.1:8787
 node test/trading.risk.test.js     # any single test
 npm run test:fast  # the full gate
