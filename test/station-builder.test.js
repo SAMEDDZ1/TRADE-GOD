@@ -163,7 +163,7 @@ for (const bp of M.BLUEPRINTS) {
   const cases = [
     [{ line: 'teleporter' }, /There is no line called "teleporter"\. The lines are: front_desk \(One agent\)/],
     [{}, /Choose a line, or give its purpose in the Commander's words\. The lines are:/],
-    [{ line: 'build_test', x: 3, y: 4, rotate: 90 }, /TradeGod chooses every position, belt and piece of furniture itself, so these fields are not accepted: x, y, rotate/],
+    [{ line: 'build_test', x: 3, y: 4, rotate: 90 }, /TRADE GOD chooses every position, belt and piece of furniture itself, so these fields are not accepted: x, y, rotate/],
     [{ line: 'build_test', where: 'Mars' }, /There is no room called "Mars"\. Use "new room", or one of: HOME/],
     [{ line: 'build_test', steps: [{ step: 9 }] }, /This line has steps 1 to 2: 1 Engineer, 2 Tester/],
     [{ line: 'build_test', steps: [{ role: 'PILOT' }] }, /This line has no PILOT step\. Its steps are: 1 Engineer, 2 Tester/],

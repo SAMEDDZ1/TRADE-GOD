@@ -85,6 +85,26 @@ from the StarNet repository and adapt it.
 - `dev/industrial-textures/coordinated-effects/utility.test.cjs`
 - `dev/industrial-textures/prop-catalog-review.test.cjs`
 
+## StarNet's release-QA loops, packaging probes and art-dependent renders (second pass)
+
+These pinned StarNet's release pipeline (signing, clean installs, update delivery, public distribution, the
+open-source launch), packaged-process names, or rendered StarNet sprite sets:
+
+- `test/opensource-readiness.test.js`
+- `test/phase5.runner.test.js`
+- `test/t0-clean-install.test.js`
+- `test/t1-signing.test.js`
+- `test/t3-release-smoke.test.js`
+- `test/t4-update-delivery.test.js`
+- `test/t5-public-distribution.test.js`
+- `test/packaged-lifecycle.test.js`
+- `test/desktop-build-macos-python-host.test.js`
+- `test/voice-floor-canary.test.js`
+- `test/frontend-dist-staging.test.js`
+- `test/cli-floor.test.js`
+- `test/world-immersion-characters.test.js`
+- `test/local-voice-cache-root.test.js`
+
 ## Still owed
 
 - TRADE GOD's own CI and release workflows (signing key, updater key, installers) — then restore release tests against them.

@@ -283,7 +283,7 @@ const answer = usage => async () => new Response(JSON.stringify({ choices: [{ me
         A.ok(/Cost: \$0\.0500/.test(priced.content), 'a priced image');
         A.eq(pool.mediaCount(), { running: 0, unknown: 0 }, 'is no count');
         const first = await withCheck(answer(null)).generateTool.run({ prompt: 'a cat' }, ctx);
-        A.ok(/TradeGod stops a run at 1 of them/.test(first.content), 'an unknown image says the count: ' + first.content);
+        A.ok(/TRADE GOD stops a run at 1 of them/.test(first.content), 'an unknown image says the count: ' + first.content);
         A.eq(pool.mediaCount(), { running: 0, unknown: 1 }, 'and counts');
         let posted = 0, refused = '';
         try { await withCheck(async (...x) => { posted++; return answer(null)(...x); }).generateTool.run({ prompt: 'a cat' }, ctx); } catch (e) { refused = e.message; }

@@ -102,7 +102,7 @@ for (const [scope, cap, want] of [
   A.ok(/state\.budgetProjected = p\.budgetProjected === true;/.test(hubSrc) && /budgetNote\(st\.budgetScope, st\.budgetCapUsd, !!st\.budgetCapIsBalance, st\.budgetProjected === true\)/.test(hubSrc), 'channels: the run end\'s budgetProjected is latched and reaches the note');
   const acp = require('../sidecar/acp/core.js')._internals;
   A.ok(/stopped before it would pass its per-run spend cap/.test(acp.endNote('budget', false, true)), 'ACP: a projected stop says it stopped before its cap');
-  A.ok(/TradeGod balance/.test(acp.endNote('budget', true, true)) && !/used what was left/.test(acp.endNote('budget', true, true)), 'ACP: a projected balance stop never says the balance was used up');
+  A.ok(/TRADE GOD balance/.test(acp.endNote('budget', true, true)) && !/used what was left/.test(acp.endNote('budget', true, true)), 'ACP: a projected balance stop never says the balance was used up');
 }
 
 // ---- the UNPRICED-model TOKEN ceiling is not a $ cap (2026-10-11) ----
@@ -154,7 +154,7 @@ for (const [scope, cap, want] of [
   const bal = SlagLog.diagnose('budget', { atBalance: true, cacheFrac: 0.05 });
   const line = SlagLog.line(bal);
   A.eq(bal.reason, 'budget', 'a balance stop is still a budget post-mortem (the maintenance quest keys on the reason)');
-  A.ok(/TradeGod balance/.test(line) && /add credits under SETTINGS → AI & MODELS/i.test(line) && !/raise/i.test(line), 'a balance stop toast names the balance and the top-up door: ' + line);
+  A.ok(/TRADE GOD balance/.test(line) && /add credits under SETTINGS → AI & MODELS/i.test(line) && !/raise/i.test(line), 'a balance stop toast names the balance and the top-up door: ' + line);
   A.ok(/^hit the budget cap — Raise the budget/.test(SlagLog.line(SlagLog.diagnose('budget', { atBalance: false }))), 'a stop at a chosen cap keeps its own post-mortem');
   A.ok(/cold cache/.test(SlagLog.diagnose('budget', { cacheFrac: 0.05 }).title), 'and the cold-cache lesson is unchanged for a cap stop');
   const world = read('frontend/app/world.js');
@@ -184,7 +184,7 @@ for (const [scope, cap, want] of [
   const note = endNote('budget');
   A.ok(/SETTINGS › SPENDING LIMITS/.test(note) && !/MISSION CONTROL/.test(note), 'an ACP budget stop names SPENDING LIMITS: ' + note);
   const bal = endNote('budget', true);
-  A.ok(/TradeGod balance/.test(bal) && /SETTINGS → AI & MODELS/.test(bal) && !/raise/.test(bal), 'an ACP balance stop names the balance and the top-up door: ' + bal);
+  A.ok(/TRADE GOD balance/.test(bal) && /SETTINGS → AI & MODELS/.test(bal) && !/raise/.test(bal), 'an ACP balance stop names the balance and the top-up door: ' + bal);
 }
 // ACP: only the lead's own end decides (a delegated worker's run.end rides the same stream)
 async function acpLeadOnly() {
@@ -202,9 +202,9 @@ async function acpLeadOnly() {
     return sent.map(p => (p && p.update && p.update.content && p.update.content.text) || '').join('');
   };
   const lead = await turn([['agent.run.start', { runId: 'lead' }], ['agent.run.end', { runId: 'lead', reason: 'budget', budgetScope: 'run', budgetCapUsd: 3, budgetCapIsBalance: true }]]);
-  A.ok(/TradeGod balance/.test(lead), 'the lead\'s balance stop reaches the editor: ' + JSON.stringify(lead.slice(-160)));
+  A.ok(/TRADE GOD balance/.test(lead), 'the lead\'s balance stop reaches the editor: ' + JSON.stringify(lead.slice(-160)));
   const worker = await turn([['agent.run.start', { runId: 'lead' }], ['agent.run.start', { runId: 'w1' }], ['agent.run.end', { runId: 'w1', reason: 'budget', budgetScope: 'run', budgetCapIsBalance: true }], ['agent.run.end', { runId: 'lead', reason: 'budget', budgetScope: 'run', budgetCapUsd: 3 }]]);
-  A.ok(/SPENDING LIMITS/.test(worker) && !/TradeGod balance/.test(worker), 'a worker\'s balance stop never speaks for the lead: ' + JSON.stringify(worker.slice(-160)));
+  A.ok(/SPENDING LIMITS/.test(worker) && !/TRADE GOD balance/.test(worker), 'a worker\'s balance stop never speaks for the lead: ' + JSON.stringify(worker.slice(-160)));
   // a PROJECTED lead stop (agent.run.end budgetProjected) reaches the editor as "stopped before", never "hit"
   const projected = await turn([['agent.run.start', { runId: 'lead' }], ['agent.run.end', { runId: 'lead', reason: 'budget', budgetScope: 'run', budgetCapUsd: 3, budgetProjected: true }]]);
   A.ok(/stopped before it would pass its per-run spend cap/.test(projected) && !/hit a spend cap/.test(projected), 'the lead\'s projected stop reaches the editor as "stopped before": ' + JSON.stringify(projected.slice(-160)));

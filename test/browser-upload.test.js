@@ -471,7 +471,7 @@ const rejects = async (p, re, message) => { try { await p; A.ok(false, message +
         A.ok(fs.existsSync(copy), 'P1 W-R7 (b): the staged copy outlives the reply while its page lives (was: deleted at the reply end)');
         d.personSubmit();
         A.eq(sentBytes(d), [OWN6], 'P1 W-R7 (b): the person\'s later Submit sends the selected bytes (was: ERR_FILE_NOT_FOUND, nothing sent)');
-        A.ok(/TradeGod keeps that copy while this page stays open, at most 30 min, so the form can still be submitted after this reply/.test(receipt.content)
+        A.ok(/TRADE GOD keeps that copy while this page stays open, at most 30 min, so the form can still be submitted after this reply/.test(receipt.content)
           && /When the page navigates away, its tab or the browser closes, another agent takes this browser, or 30 min pass, the copy is dropped and an input still holding it is emptied/.test(receipt.content)
           && /The input holds the requested file now\./.test(receipt.content) && !/still holds/.test(receipt.content),
           'P1: the receipt states the copy\'s real lifecycle: ' + receipt.content.slice(0, 420));
@@ -834,7 +834,7 @@ const rejects = async (p, re, message) => { try { await p; A.ok(false, message +
       const prose = c => c.replace(/\[BEGIN EXTERNAL WEB CONTENT[\s\S]*?\[END EXTERNAL WEB CONTENT\]/g, '');
       // every sentence that says the input holds/keeps/retains the files. The cleared variant's "no longer retains" is not
       // one, and neither is "TRADE GOD keeps that copy": that is the copy's lifetime, pinned word for word below
-      const holds = c => prose(c).split(/(?<=\.)\s+/).filter(s => /\binput\b/i.test(s) && /\b(holds|keeps|retains|still has)\b/i.test(s.replace(/\bStarNet keeps\b/g, '')) && !/\b(no longer|cleared)\b/i.test(s));
+      const holds = c => prose(c).split(/(?<=\.)\s+/).filter(s => /\binput\b/i.test(s) && /\b(holds|keeps|retains|still has)\b/i.test(s.replace(/\bTRADE GOD keeps\b/g, '')) && !/\b(no longer|cleared)\b/i.test(s));
       const stagedNow = () => (fs.existsSync(path.join(stagingRoot, 'r7')) ? fs.readdirSync(path.join(stagingRoot, 'r7')) : []);
       const LIFETIMES = [
         { label: 'no page identity', namesPage: false, outlivesRun: false,
@@ -842,7 +842,7 @@ const rejects = async (p, re, message) => { try { await p; A.ok(false, message +
         { label: 'a run\'s own browser', namesPage: true, outlivesRun: false,
           life: /This run browses in its own browser, which closes when this reply ends: TRADE GOD keeps that copy until then \(at most 30 min\) and re-checks it before each later browser action, so submit the form in this reply; after it, that page and its file are gone\. If the page navigates away or its tab closes first, the copy is dropped and an input still holding it is emptied\. / },
         { label: 'a browser that outlives the run', namesPage: true, outlivesRun: true,
-          life: /TradeGod keeps that copy while this page stays open, at most 30 min, so the form can still be submitted after this reply \(by you later, or by the person\), and re-checks it before each later browser action\. When the page navigates away, its tab or the browser closes, another agent takes this browser, or 30 min pass, the copy is dropped and an input still holding it is emptied\. / }
+          life: /TRADE GOD keeps that copy while this page stays open, at most 30 min, so the form can still be submitted after this reply \(by you later, or by the person\), and re-checks it before each later browser action\. When the page navigates away, its tab or the browser closes, another agent takes this browser, or 30 min pass, the copy is dropped and an input still holding it is emptied\. / }
       ];
       for (const { label, namesPage, outlivesRun, life } of LIFETIMES) {
         let keep = true;

@@ -58,9 +58,9 @@ function sub(over) {
 
   // ---- refusals ----
   const why = (s, metas) => (P.planPull([s], ctx(metas)).skipped[0] || {}).why || '';
-  A.ok(/TradeGod Original/.test(why(sub({ slug: 'daily-briefing', files: sub({ slug: 'daily-briefing' }).files }))), 'a bundled original\'s name is refused');
+  A.ok(/TRADE GOD Original/.test(why(sub({ slug: 'daily-briefing', files: sub({ slug: 'daily-briefing' }).files }))), 'a bundled original\'s name is refused');
   A.ok(/another author's upload/.test(why(sub(), { 'meeting-recap-writer': { version: '1.0.0', submission: { owner: OTHER } } })), 'another author\'s name is refused');
-  A.ok(/TradeGod publishes already/.test(why(sub(), { 'meeting-recap-writer': { version: '1.0.0', upstream: { url: 'https://x' } } })), 'an adapted pick\'s name is refused');
+  A.ok(/TRADE GOD publishes already/.test(why(sub(), { 'meeting-recap-writer': { version: '1.0.0', upstream: { url: 'https://x' } } })), 'an adapted pick\'s name is refused');
   A.ok(/digest the reviewer approved/.test(why(sub({ digest: 'f'.repeat(64) }))), 'a package that is not the approved one is refused');
   const withScript = sub().files.concat([{ path: 'references/run.sh', content: 'echo hi' }]);
   A.ok(/not a file the market allows/.test(why(sub({ files: withScript }))), 'a script file is refused');

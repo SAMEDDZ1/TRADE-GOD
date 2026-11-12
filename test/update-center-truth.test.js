@@ -253,7 +253,7 @@ function launch(store, opts) {
     A.eq(pending.length, 1, 'one automatic timer is scheduled');
     A.ok(pending[0] && pending[0].delay >= UpdateCore.REMIND_LATER_MS - 1000, 'the next automatic step waits for the reminder');
     const before = s.checks.length;
-    const readyToasts = () => s.toasts.filter(t => /TradeGod update v0\.13\.3 is ready in Update Center/.test(t)).length;
+    const readyToasts = () => s.toasts.filter(t => /TRADE GOD update v0\.13\.3 is ready in Update Center/.test(t)).length;
     const toastsBefore = readyToasts();
     clock.t += 25 * 60 * 60 * 1000;                  // the timer fires a day later
     if (pending[0]) pending[0].fn();

@@ -275,9 +275,9 @@
           "content-type": "application/json",
           "openai-beta": "responses=experimental",
           "originator": "codex_cli_rs",
-          "session_id": "09bbaa25-55df-3a4c-784c-669c04ec7b03"
+          "session_id": "b5ad2c72-4fef-9503-5e81-5e52abbb18a0"
         },
-        "body": "{\"model\":\"gpt-5.4-codex\",\"instructions\":\"You are a TRADE GOD agent. Answer briefly.\",\"input\":[{\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"hello there\"}]}],\"store\":false,\"stream\":true,\"reasoning\":{\"effort\":\"low\",\"summary\":\"auto\"},\"include\":[\"reasoning.encrypted_content\"],\"prompt_cache_key\":\"09bbaa25-55df-3a4c-784c-669c04ec7b03\"}"
+        "body": "{\"model\":\"gpt-5.4-codex\",\"instructions\":\"You are a TRADE GOD agent. Answer briefly.\",\"input\":[{\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"hello there\"}]}],\"store\":false,\"stream\":true,\"reasoning\":{\"effort\":\"low\",\"summary\":\"auto\"},\"include\":[\"reasoning.encrypted_content\"],\"prompt_cache_key\":\"b5ad2c72-4fef-9503-5e81-5e52abbb18a0\"}"
       }
     ],
     "error": ""
@@ -294,9 +294,9 @@
           "content-type": "application/json",
           "openai-beta": "responses=experimental",
           "originator": "codex_cli_rs",
-          "session_id": "09bbaa25-55df-3a4c-784c-669c04ec7b03"
+          "session_id": "b5ad2c72-4fef-9503-5e81-5e52abbb18a0"
         },
-        "body": "{\"model\":\"gpt-5.4-codex\",\"instructions\":\"You are a TRADE GOD agent. Answer briefly.\",\"input\":[{\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"read notes.md and search for its title\"}]},{\"type\":\"function_call\",\"call_id\":\"call_1\",\"name\":\"fs_read\",\"arguments\":\"{\\\"path\\\":\\\"notes.md\\\"}\"},{\"type\":\"function_call_output\",\"call_id\":\"call_1\",\"output\":\"# Station notes\\nline two\"},{\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"now search\"}]}],\"store\":false,\"stream\":true,\"reasoning\":{\"effort\":\"low\",\"summary\":\"auto\"},\"include\":[\"reasoning.encrypted_content\"],\"tools\":[{\"type\":\"function\",\"name\":\"fs_read\",\"description\":\"Read a file in the workspace.\",\"strict\":false,\"parameters\":{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\",\"description\":\"workspace path\"}},\"required\":[\"path\"]}},{\"type\":\"function\",\"name\":\"web_search\",\"description\":\"Search the web.\",\"strict\":false,\"parameters\":{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"},\"limit\":{\"type\":\"integer\"}},\"required\":[\"query\"]}}],\"tool_choice\":\"auto\",\"parallel_tool_calls\":true,\"prompt_cache_key\":\"09bbaa25-55df-3a4c-784c-669c04ec7b03\"}"
+        "body": "{\"model\":\"gpt-5.4-codex\",\"instructions\":\"You are a TRADE GOD agent. Answer briefly.\",\"input\":[{\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"read notes.md and search for its title\"}]},{\"type\":\"function_call\",\"call_id\":\"call_1\",\"name\":\"fs_read\",\"arguments\":\"{\\\"path\\\":\\\"notes.md\\\"}\"},{\"type\":\"function_call_output\",\"call_id\":\"call_1\",\"output\":\"# Station notes\\nline two\"},{\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"now search\"}]}],\"store\":false,\"stream\":true,\"reasoning\":{\"effort\":\"low\",\"summary\":\"auto\"},\"include\":[\"reasoning.encrypted_content\"],\"tools\":[{\"type\":\"function\",\"name\":\"fs_read\",\"description\":\"Read a file in the workspace.\",\"strict\":false,\"parameters\":{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\",\"description\":\"workspace path\"}},\"required\":[\"path\"]}},{\"type\":\"function\",\"name\":\"web_search\",\"description\":\"Search the web.\",\"strict\":false,\"parameters\":{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"},\"limit\":{\"type\":\"integer\"}},\"required\":[\"query\"]}}],\"tool_choice\":\"auto\",\"parallel_tool_calls\":true,\"prompt_cache_key\":\"b5ad2c72-4fef-9503-5e81-5e52abbb18a0\"}"
       }
     ],
     "error": ""
@@ -313,9 +313,9 @@
           "content-type": "application/json",
           "openai-beta": "responses=experimental",
           "originator": "codex_cli_rs",
-          "session_id": "09bbaa25-55df-3a4c-784c-669c04ec7b03"
+          "session_id": "b5ad2c72-4fef-9503-5e81-5e52abbb18a0"
         },
-        "body": "{\"model\":\"gpt-5.4-codex\",\"instructions\":\"You are a TRADE GOD agent. Answer briefly.\",\"input\":[{\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"think about 17 * 23\"}]}],\"store\":false,\"stream\":true,\"reasoning\":{\"effort\":\"high\",\"summary\":\"auto\"},\"include\":[\"reasoning.encrypted_content\"],\"prompt_cache_key\":\"09bbaa25-55df-3a4c-784c-669c04ec7b03\"}"
+        "body": "{\"model\":\"gpt-5.4-codex\",\"instructions\":\"You are a TRADE GOD agent. Answer briefly.\",\"input\":[{\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"think about 17 * 23\"}]}],\"store\":false,\"stream\":true,\"reasoning\":{\"effort\":\"high\",\"summary\":\"auto\"},\"include\":[\"reasoning.encrypted_content\"],\"prompt_cache_key\":\"b5ad2c72-4fef-9503-5e81-5e52abbb18a0\"}"
       }
     ],
     "error": ""
@@ -332,9 +332,9 @@
           "content-type": "application/json",
           "openai-beta": "responses=experimental",
           "originator": "codex_cli_rs",
-          "session_id": "09bbaa25-55df-3a4c-784c-669c04ec7b03"
+          "session_id": "b5ad2c72-4fef-9503-5e81-5e52abbb18a0"
         },
-        "body": "{\"model\":\"gpt-5.4-codex\",\"instructions\":\"You are a TRADE GOD agent. Answer briefly.\",\"input\":[{\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"what is in this picture?\"},{\"type\":\"input_image\",\"image_url\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==\"}]}],\"store\":false,\"stream\":true,\"reasoning\":{\"effort\":\"low\",\"summary\":\"auto\"},\"include\":[\"reasoning.encrypted_content\"],\"prompt_cache_key\":\"09bbaa25-55df-3a4c-784c-669c04ec7b03\"}"
+        "body": "{\"model\":\"gpt-5.4-codex\",\"instructions\":\"You are a TRADE GOD agent. Answer briefly.\",\"input\":[{\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"what is in this picture?\"},{\"type\":\"input_image\",\"image_url\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==\"}]}],\"store\":false,\"stream\":true,\"reasoning\":{\"effort\":\"low\",\"summary\":\"auto\"},\"include\":[\"reasoning.encrypted_content\"],\"prompt_cache_key\":\"b5ad2c72-4fef-9503-5e81-5e52abbb18a0\"}"
       }
     ],
     "error": ""

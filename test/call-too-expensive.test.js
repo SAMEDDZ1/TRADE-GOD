@@ -69,7 +69,7 @@ function relayErr(text, extraBody) {
   A.eq(v.kind, 'call_too_expensive', 'node ladder kind');
   A.eq(v.retryable, false, 'no ↻ Try again on a refusal a resend repeats');
   A.ok(/\$2\.00 TRADE GOD allows for one call/.test(v.userMessage), 'quotes the ceiling the relay named: ' + v.userMessage);
-  A.ok(/TradeGod refused the call/.test(v.userMessage) && /fresh chat/.test(v.userMessage) && /cheaper model/.test(v.userMessage),
+  A.ok(/TRADE GOD refused the call/.test(v.userMessage) && /fresh chat/.test(v.userMessage) && /cheaper model/.test(v.userMessage),
     'says TRADE GOD refused the call and names both fixes');
   /* 0.14.2 review: it said "nothing was charged". The station knows only that the relay refused THIS call: the refused
      call can be a run's later one, after its earlier calls were billed. The copy claims nothing about what was spent. */
@@ -94,7 +94,7 @@ function relayErr(text, extraBody) {
   A.ok(/\$2\.00 TRADE GOD allows for one call/.test(v.userMessage), 'browser copy quotes the ceiling');
   const five = F.friendlyError(new Error('openrouter http 400 — ' + RELAY_TEXT.replace('$2.00', '$5.00')));
   A.ok(/\$5\.00 TRADE GOD allows/.test(five.userMessage), 'a raised ceiling is quoted as the relay said it, never as $2');
-  A.ok(/TradeGod refused the call/.test(v.userMessage) && !/charged/i.test(v.userMessage) && !/charged/i.test(F.KINDS.call_too_expensive.msg),
+  A.ok(/TRADE GOD refused the call/.test(v.userMessage) && !/charged/i.test(v.userMessage) && !/charged/i.test(F.KINDS.call_too_expensive.msg),
     'the browser copy and its fallback say the call was refused, never that nothing was charged: ' + v.userMessage);
   // no status in the text (an in-band relay message): the message ladder still finds it
   A.eq(F.friendlyError(new Error(RELAY_TEXT)).kind, 'call_too_expensive', 'browser ladder with no status');

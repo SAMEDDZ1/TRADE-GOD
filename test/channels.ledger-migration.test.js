@@ -217,7 +217,7 @@ const bootMigrated = (store) => !!(store._internals && store._internals.migratio
     A.eq(runs.filter(r => /first half|second half/.test(r)), [], 'and the run that earned it never runs again');
     A.eq(runs.filter(r => r === 'telegram:plain').length, 1, 'a receipt that never reached a run is replayed once');
     A.eq(runs.filter(r => /with tools/.test(r)), [], 'a receipt whose run had begun tool steps is never run again');
-    A.eq(tgSent.filter(x => /TradeGod restarted while it was working on "with tools"/.test(x) && /NOT run again/.test(x)).length, 1, 'it gets the interrupted notice, once');
+    A.eq(tgSent.filter(x => /TRADE GOD restarted while it was working on "with tools"/.test(x) && /NOT run again/.test(x)).length, 1, 'it gets the interrupted notice, once');
     A.eq(runs.filter(r => /corrected/.test(r)), [], 'an edit of a message this process never saw is settled, never run');
     A.eq(sent.filter(x => /Discord, late\./.test(x)).length, 1, 'the Discord queued reply lands once, on Discord');
     A.eq(runs.filter(r => r === 'discord:from discord').length, 1, 'and the Discord receipt runs once, on Discord');

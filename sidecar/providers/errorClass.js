@@ -335,7 +335,7 @@
      classification's `unsupportedPart` fact (the failure review keys on it: its plain text request has no such part). */
   const UNSUPPORTED_PART_RE = /no endpoints found that (?:support|can handle)\b/;
   // the TRADE GOD credit relay's per-call ceiling refusal (starnet-cloud src/app.js THE CREDIT RESERVATION)
-  const CALL_TOO_EXPENSIVE_RE = /could cost more than the \$\d+(?:\.\d+)? starnet allows for one call/;
+  const CALL_TOO_EXPENSIVE_RE = /could cost more than the \$\d+(?:\.\d+)? (?:starnet|trade god) allows for one call/;
   function isCallTooExpensive(code, low) {
     return String(code || '').toLowerCase() === 'call_too_expensive' || CALL_TOO_EXPENSIVE_RE.test(low);
   }

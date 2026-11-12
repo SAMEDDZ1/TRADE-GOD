@@ -122,4 +122,4 @@ See [docs/TRADE_GOD_SPEC.md](docs/TRADE_GOD_SPEC.md) for the full plan and what 
 ## Credits
 
 TRADE GOD is built on the open-source [StarNet](https://github.com/androoAGI/starnet) agent harness by
-Andrew Sims (MIT). See [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md). TradingView Lightweight Charts™ is © TradingView, Inc. (Apache 2.0).
+Andrew Sims (MIT). See [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md).

@@ -174,7 +174,7 @@ const { makeStationControlTools, cardFor, ACTIONS } = require('../sidecar/tools/
     await b.GC.addAgents(b.ws.get('general-home'), ['nova'], { streamId: 'general-home', runId: 'run_b', brief: 'What are we launching? → TRADE GOD 0.13.5; Who is it for? → developers' });
     A.eq(b.ws.get('general-home').pendingJoin.brief, 'What are we launching? → TRADE GOD 0.13.5; Who is it for? → developers', 'the answers are saved with the join');
     await b.GC.addAgents(b.ws.get('general-home'), ['sam'], { streamId: 'general-home', runId: 'run_b' });
-    A.ok(/TradeGod 0\.13\.5/.test(b.ws.get('general-home').pendingJoin.brief || ''), 'a second seat in the same reply keeps them');
+    A.ok(/TRADE GOD 0\.13\.5/.test(b.ws.get('general-home').pendingJoin.brief || ''), 'a second seat in the same reply keeps them');
     b.busy.delete('general-home'); b.ws.get('general-home').lastRunOk = true;
     await b.GC.drainAfterRun('general-home', 'run_b', { stopped: false }); await settle();
     const create = b.sent.find(s => s.body && s.body.op === 'create');

@@ -82,7 +82,7 @@ test('the desk card: a glance line in the phrase, the whole request in INSPECT',
   const tagline = { tool: 'team.dispatch', argsSummary: JSON.stringify({ background: true, workers: [
     { agentId: 'copywriter', prompt: 'Write a 2-line launch tagline for TRADE GOD 0.13.5 into a file called tagline.md.' },
     { agentId: 'strategist', prompt: 'Review the positioning of the TRADE GOD 0.13.5 launch and name the one claim to cut.' }] }) };
-  assert.equal(card.actionPhrase(tagline, true), 'hand copywriter “Write a 2-line launch tagline for TRADE GOD 0.13.5 into a … tagline.md” and strategist “Review the positioning of the TRADE GOD 0.13.5 launch and name the one…” (in the background)');
+  assert.equal(card.actionPhrase(tagline, true), 'hand copywriter “Write a 2-line launch tagline for TRADE GOD 0.13.5 into a … tagline.md” and strategist “Review the positioning of the TRADE GOD 0.13.5 launch and name the…” (in the background)');
   assert.doesNotMatch(card.actionPhrase({ tool: 'team.dispatch', argsSummary: JSON.stringify({ workers: [{ agentId: 'a', prompt: 'Compare version 0.13.5 against 0.13.2 and list every regression you can find in the notes' }] }) }, true), / … 0\.13/, 'a version number is not a file');
   // a goal loop says what it repeats toward (it read "use loop create: …")
   assert.equal(card.actionPhrase({ tool: 'loop.create', argsSummary: JSON.stringify({ objective: 'Write and refine the final 2-sentence launch post', exitOn: 'never' }) }),

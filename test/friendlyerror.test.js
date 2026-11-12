@@ -403,7 +403,7 @@ for (const raw of [
     A.eq(v.kind, 'provider_server_error', raw + ' is the PROVIDER\'s server fault (delegate path)');
     A.eq(kindFromRaw(raw.toLowerCase(), null), 'provider_server_error', raw + ' — BROWSER ladder agrees');
     A.eq(v.retryable, true, raw + ' is retryable (load spikes pass)');
-    A.ok(!/local .*service|starnet service/i.test(v.userMessage) || /TradeGod itself is fine/i.test(v.userMessage),
+    A.ok(!/local .*service|starnet service/i.test(v.userMessage) || /TRADE GOD itself is fine/i.test(v.userMessage),
       raw + ' must NEVER blame the local service');
     A.ok(/provider/i.test(v.userMessage), raw + ' names the provider\'s servers');
     A.ok(/fine/i.test(v.userMessage), raw + ' reassures the user their install is healthy');
@@ -416,7 +416,7 @@ for (const raw of [
     'BROWSER: a bare sidecar 500 keeps the local-service copy');
   A.eq(friendlyError(Object.assign(new Error('sidecar HTTP 500 — internal error'), { status: 500 })).kind,
     'server_error', 'DELEGATE: a bare sidecar 500 keeps the local-service copy');
-  A.ok(/local starnet service/i.test(KINDS.server_error.msg), 'the local copy still exists for the proven-local case');
+  A.ok(/local trade god service/i.test(KINDS.server_error.msg), 'the local copy still exists for the proven-local case');
   // the two ladders must agree on the flagship shape, or the halves drift again
   A.eq(kindFromRaw('anthropic http 529 - overloaded', null),
     friendlyError(new Error('Anthropic http 529 - Overloaded')).kind,

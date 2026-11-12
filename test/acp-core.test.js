@@ -274,7 +274,7 @@ function harness(opts) {
     const r = await h.core.handleRpc(rpc(3, 'session/prompt', { sessionId: sid, prompt: [{ type: 'text', text: 'go' }] }));
     A.eq(r.result.stopReason, 'end_turn', 'a transport failure still resolves the prompt (a never-resolving turn hangs the editor)');
     A.ok(/could not complete this turn/.test(h.text()), 'and the user is told, in the transcript');
-    A.ok(/TradeGod is not running/.test(h.text()), 'with the real reason');
+    A.ok(/TRADE GOD is not running/.test(h.text()), 'with the real reason');
   }
 
   /* ---- 10. one turn at a time; cancel reaches the run ----------------------------------------- */

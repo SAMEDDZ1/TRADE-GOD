@@ -653,7 +653,7 @@ const DNS_TEXT = {
       'and browser.js explainRefusal says exactly that');
     const web = S.privateAnswerExit('api.shop.example', '10.1.2.3', 'web');
     A.ok(web.startsWith('this computer\'s DNS answered 10.1.2.3 for api.shop.example, a private or blocked address.') && /Fix or allow api\.shop\.example in that DNS filter\.$/.test(web) &&
-      /own secure DNS/.test(web) && !/TradeGod's browser/.test(web), 'the web voice: what answered, who usually answers so, and the exit');
+      /own secure DNS/.test(web) && !/TRADE GOD's browser/.test(web), 'the web voice: what answered, who usually answers so, and the exit');
     const station = S.privateAnswerExit('auth.example', '0.0.0.0', 'connectorOauth');
     A.ok(/DNS answered 0\.0\.0\.0 for auth\.example/.test(station) && /Fix or allow auth\.example in that DNS filter\.$/.test(station) && !/own secure DNS/.test(station),
       'connector sign-in speaks in the station voice (a policy name picks its voice)');

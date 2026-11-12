@@ -75,8 +75,8 @@
    {"op":"event","name":"channel.delivery","payload":{"channel":"telegram","chatId":"-100500","runId":"run-4","ok":true,"chunks":1,"reason":"done","agentId":"tg_-100500"}}
   ],
   "crash-replay-0-tools": [
-   {"op":"send","chatId":"4242","text":"↻ TRADE GOD restarted while it was working on \"draft the email\". It had not begun ","opts":null},
-   {"op":"send","chatId":"4242","text":"any tool step yet, so nothing can happen twice — running it again now.","opts":null},
+   {"op":"send","chatId":"4242","text":"↻ TRADE GOD restarted while it was working on \"draft the email\". It had not ","opts":null},
+   {"op":"send","chatId":"4242","text":"begun any tool step yet, so nothing can happen twice — running it again now.","opts":null},
    {"op":"event","name":"channel.delivery","payload":{"channel":"telegram","chatId":"4242","runId":"dead-run-1","ok":true,"chunks":2,"reason":"command","agentId":"tg_4242"}},
    {"op":"send","chatId":"4242","text":"Draft ready.","opts":{"idempotencyKey":"sn299f99c9da2643b9"}},
    {"op":"event","name":"channel.delivery","payload":{"channel":"telegram","chatId":"4242","runId":"run-1","ok":true,"chunks":1,"reason":"done","agentId":"tg_4242"}}

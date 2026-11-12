@@ -96,7 +96,7 @@ const unknownRows = file => ledgerRows(file).filter(r => r.aux === 'image-unknow
     A.eq(refused.length, 1, 'one was refused: ' + refused.map(r => r.text.slice(0, 160)).join(' | '));
     A.ok(refused[0] && /this run and its workers have generated 10 images whose cost is unknown/.test(refused[0].text) && /stops at 10 in one run/.test(refused[0].text)
       && /nothing was charged/.test(refused[0].text) && /start a new run/.test(refused[0].text), 'by the per-run cap, in plain words: ' + (refused[0] && refused[0].text.slice(0, 400)));
-    A.ok(results.filter(r => !/did not start/.test(r.text)).every(r => /Cost: UNKNOWN/.test(r.text) && /TradeGod stops a run at 10 of them, and every run at 11 in any 24 hours/.test(r.text)), 'every image made says its cost is unknown and the counts that stop it');
+    A.ok(results.filter(r => !/did not start/.test(r.text)).every(r => /Cost: UNKNOWN/.test(r.text) && /TRADE GOD stops a run at 10 of them, and every run at 11 in any 24 hours/.test(r.text)), 'every image made says its cost is unknown and the counts that stop it');
     const rows1 = unknownRows(ledgerFile());
     A.eq(rows1.length, 10, 'the real ledger file holds one image-unknown-cost row per image: ' + rows1.length);
     A.ok(rows1.every(r => r.usd === 0 && r.unpriced === true && r.model === 'image' && r.agentId === 'cap-run-one' && typeof r.entryId === 'string' && r.ts > 0), 'each a $0 unpriced aux row under its run, written through ledgerIo');
@@ -109,7 +109,7 @@ const unknownRows = file => ledgerRows(file).filter(r => r.aux === 'image-unknow
     A.eq(stub.images, 11, 'the new run made one more image (11 of 11 today), and only one');
     const dayRefused = stub.toolResults.filter(r => /did not start/.test(r.text));
     A.eq(dayRefused.length, 1, 'its second image was refused');
-    A.ok(dayRefused[0] && /TradeGod has recorded 11 images whose cost is unknown in the last 24 hours across all runs/.test(dayRefused[0].text) && /Room comes back in about 24 hours/.test(dayRefused[0].text),
+    A.ok(dayRefused[0] && /TRADE GOD has recorded 11 images whose cost is unknown in the last 24 hours across all runs/.test(dayRefused[0].text) && /Room comes back in about 24 hours/.test(dayRefused[0].text),
       'by the 24-hour limit, counted from the file across the restart: ' + (dayRefused[0] && dayRefused[0].text.slice(0, 400)));
     A.eq(unknownRows(ledgerFile()).length, 11, 'and the file now holds 11');
 

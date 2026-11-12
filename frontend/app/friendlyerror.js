@@ -625,11 +625,11 @@
      router accepted our key (a rejected key is a 401 naming nobody). xai-403-1023. */
   const UPSTREAM_NAMED_RE = /provider returned error|[\[;] ?provider [^\];]+\]/;
   // the TRADE GOD credit relay's per-call price ceiling (sidecar/providers/errorClass.js — keep the two in step)
-  const CALL_TOO_EXPENSIVE_RE = /could cost more than the \$\d+(?:\.\d+)? starnet allows for one call|\bcall_too_expensive\b/;
+  const CALL_TOO_EXPENSIVE_RE = /could cost more than the \$\d+(?:\.\d+)? (?:starnet|trade god) allows for one call|\bcall_too_expensive\b/;
   // quote the ceiling the relay named (it is configurable there), never a number of our own; claim nothing about what
   // the run cost (KINDS.call_too_expensive says why)
   function callTooExpensiveMessage(raw) {
-    const m = /more than the (\$\d+(?:\.\d+)?) starnet allows/i.exec(String(raw || ''));
+    const m = /more than the (\$\d+(?:\.\d+)?) (?:starnet|trade god) allows/i.exec(String(raw || ''));
     if (!m) return KINDS.call_too_expensive.msg;
     return 'This conversation could now cost more per message than the ' + m[1] + ' TRADE GOD allows for one call on this model, so TRADE GOD refused the call. Start a fresh chat, or pick a cheaper model from the model dock in COMMS.';
   }
@@ -677,7 +677,7 @@
   /* The station's OWN sentences (sidecar/providers/errorClass.js templateRefusalText / unreachableNote / the TLS line): an error
      that carries no code still reads as what it is. stationSentence() lifts the sentence for the headline — the provider's raw
      text rides last in brackets and stays in raw. '' = the shape is not the station's (the KINDS fallback leads). */
-  const TEMPLATE_SENTENCE_RE = /the chat template of .{0,240}? refused the conversation starnet sent/;
+  const TEMPLATE_SENTENCE_RE = /the chat template of .{0,240}? refused the conversation (?:starnet|trade god) sent/;
   const UNREACHABLE_NOTE_RE = /nothing is listening at .{1,160}? on this computer|the connection to .{1,160}? was refused —|the name .{1,160}? (?:did not resolve|could not be looked up)/;
   // a silent local /v1 server's turn end (sidecar/providers/openai-compatible.js localSilenceError): "… (connect phase), so this turn ended."
   const LOCAL_TIMEOUT_RE = /^the model server at \S+ on this (?:computer|network) .{1,240}? \((?:connect|first byte|between chunks) phase\), so this turn ended\./;
@@ -855,7 +855,7 @@
     // and matching that as managed_credit told funded customers to top up whenever a balance check failed.
     if (/managed credits? (?:are |is )?unavailable/.test(raw.toLowerCase())) {
       kind = /refused this station'?s link|relink/.test(raw.toLowerCase()) ? 'managed_credit_link' : 'managed_credit_unavailable';
-    } else if (/managed credits? (?:are |is )?held|balance is held by \d+ running starnet run/.test(raw.toLowerCase())) {
+    } else if (/managed credits? (?:are |is )?held|balance is held by \d+ running (?:starnet|trade god) run/.test(raw.toLowerCase())) {
       kind = 'managed_credit_held';   // the balance sits in this station's own running runs' holds — never "out of credit"
     } else if (/managed credit|add credits in the store|out of managed credit/.test(raw.toLowerCase())) {
       kind = 'managed_credit';
@@ -1014,7 +1014,7 @@
       const low = raw.toLowerCase();
       const named = raw.match(/connect an? (.+?) api key\b/i);   // the sidecar guard: providerCredentialError()
       let userMessage = k.msg;
-      if (/link this station to a starnet account/.test(low)) {
+      if (/link this station to a (?:starnet|trade god) account/.test(low)) {
         userMessage = "This station isn't linked to TRADE GOD credits yet — link it under SETTINGS → AI & MODELS → STARNET MANAGED, or connect your own provider key.";
       } else if (named) {
         userMessage = 'No ' + named[1].trim().replace(/\s+api$/i, '') + ' API key is connected yet — add it under SETTINGS → AI & MODELS, or pick a model from a provider you have already connected.';

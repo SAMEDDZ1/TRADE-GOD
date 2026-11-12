@@ -413,7 +413,7 @@ function makeAcpClient(port, onPermission) {
       A.ok(r.result, 'a prompt against a dead station still resolves the turn');
       const said = lonely.textFor(s.result.sessionId);
       A.ok(/could not complete this turn/.test(said), 'and says plainly that it could not run: ' + JSON.stringify(said).slice(0, 300));
-      A.ok(/TradeGod is not running|not reachable/.test(said), 'naming the real cause rather than inventing an answer');
+      A.ok(/TRADE GOD is not running|not reachable/.test(said), 'naming the real cause rather than inventing an answer');
     } finally { lonely.kill(); await sleep(150); }
   }
 

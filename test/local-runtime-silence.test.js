@@ -132,7 +132,7 @@ async function localRows(s, origin, hostPort, where, label) {
     A.ok(msg.indexOf('The model server at ' + hostPort + ' ' + where) === 0, label + ' ' + p.mode + ': names the host and where it is: ' + msg);
     A.ok(msg.indexOf('(' + p.phase + ')') > 0, label + ' ' + p.mode + ': names the phase');
     A.ok(p.what.test(msg), label + ' ' + p.mode + ': names the wait');
-    A.ok(/TradeGod did not re-send the request/.test(msg), label + ' ' + p.mode + ': says it did not re-send');
+    A.ok(/TRADE GOD did not re-send the request/.test(msg), label + ' ' + p.mode + ': says it did not re-send');
     A.ok(/the server's own log/.test(msg) && /smaller model/.test(msg) && msg.indexOf(p.env) > 0, label + ' ' + p.mode + ': names the fixes and the env');
     A.ok(/timed out/.test(msg), label + ' ' + p.mode + ': keeps the timeout words');
     // COMMS words it as itself with or without the code (review M2): never "timed out — try again", never a context overflow
@@ -193,7 +193,7 @@ async function localRows(s, origin, hostPort, where, label) {
         A.eq(errors[0] && errors[0].transient, false, b.label + ': not transient');
         A.ok(msg.indexOf('(' + b.phase + ')') > 0, b.label + ': names the phase: ' + msg);
         A.ok(/Another TRADE GOD call was open on that server, so TRADE GOD re-sent the request once/.test(msg), b.label + ': says another call was open and the request went twice');
-        A.ok(!/TradeGod did not re-send/.test(msg), b.label + ': never claims it was not re-sent');
+        A.ok(!/TRADE GOD did not re-send/.test(msg), b.label + ': never claims it was not re-sent');
         A.eq(Friendly.friendlyError(msg, null, { engineAlive: true }).kind, 'local_timeout', b.label + ': COMMS reads it as local_timeout without the code');
       }
     }

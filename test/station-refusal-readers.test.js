@@ -172,12 +172,12 @@ const NOT_A_PROVIDER_FAULT = k => ['auth', 'billing', 'model_not_found', 'quota_
     A.eq(gateRefusedPage(H)(answer(code)), TOKEN(code), 'app.js poll (' + code + '): reloads iff the gate refused this page\'s key');
     const g = await groupWords(H, answer(code));
     A.eq(/Reconnect to this station by refreshing the page/.test(g), code === 'token_stale', 'group chat (' + code + '): "refresh to reconnect" iff token_stale: ' + g);
-    A.eq(/TradeGod could not confirm this browser/.test(g), code === 'token_missing', 'group chat (' + code + '): the withheld notice iff token_missing');
+    A.eq(/TRADE GOD could not confirm this browser/.test(g), code === 'token_missing', 'group chat (' + code + '): the withheld notice iff token_missing');
     global.Harness = H;
     const rated = await XpStore.recordWorkRating({ runId: 'r-' + code, verdict: 'great' }, async () => answer(code));
     delete global.Harness;
     A.eq(/Rating connection was rejected — reload/.test(rated.error), code === 'token_stale', 'rating (' + code + '): "rejected — reload" iff token_stale: ' + rated.error);
-    A.eq(/TradeGod could not confirm this browser/.test(rated.error), code === 'token_missing', 'rating (' + code + '): the withheld notice iff token_missing');
+    A.eq(/TRADE GOD could not confirm this browser/.test(rated.error), code === 'token_missing', 'rating (' + code + '): the withheld notice iff token_missing');
     nextPull = () => Promise.resolve(answer(code));
     const pulled = await CloudSave.reconcile(null);
     A.eq(pulled && pulled.reason === 'forbidden', TOKEN(code), 'save pull (' + code + '): "refused this window" iff the gate refused its key (' + (pulled && pulled.reason) + ')');

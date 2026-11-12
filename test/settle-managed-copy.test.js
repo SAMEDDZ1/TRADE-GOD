@@ -34,7 +34,7 @@ const harness = (status) => {
   // its run id, on a linked station AND on an operator (env) station — the account web page has no run ids, and an
   // operator station's charges are not on account.starnetos.com at all
   const mTip = managedRow.attrs['data-tip'];
-  assert.match(mTip, /TradeGod credits/, 'the managed row says it ran on TRADE GOD credits: ' + mTip);
+  assert.match(mTip, /TRADE GOD credits/, 'the managed row says it ran on TRADE GOD credits: ' + mTip);
   assert.match(mTip, /SETTINGS → AI & MODELS › STORE › RECENT ACTIVITY/, 'and where its charge is: ' + mTip);
   assert.match(mTip, /run m1\b/, 'naming the run id the activity lists it under: ' + mTip);
   assert.doesNotMatch(mTip, /account\.starnetos\.com/, 'no hardcoded account host');

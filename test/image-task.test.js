@@ -151,7 +151,7 @@ A.ok(/reason: taskQuestionAsked \? 'clarifying' : \(\(result && result\.reason\)
 
 
 const byokRecovery = ImageTask.admissionBlocker({ hasStudio: true, studioEnabled: true, providerId: 'custom', model: 'local-model', route: { ok: false } });
-A.ok(/OpenAI or OpenRouter API key/.test(byokRecovery) && /TradeGod account/.test(byokRecovery), 'BYOK media recovery exposes all supported routes');
+A.ok(/OpenAI or OpenRouter API key/.test(byokRecovery) && /TRADE GOD account/.test(byokRecovery), 'BYOK media recovery exposes all supported routes');
 const managedRecovery = ImageTask.admissionBlocker({ hasStudio: true, studioEnabled: true, providerId: 'starnet', route: { ok: false } });
 A.ok(/relink/.test(managedRecovery) && !/OpenRouter/.test(managedRecovery), 'managed failure stays on the linked-account route');
 

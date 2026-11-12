@@ -83,7 +83,7 @@ const tail = s => s.trim().split('\n').slice(-3).join(' | ');
 
     const d = await cli(['status'], env, 30000);
     A.eq(d.code, 3, 'status: exit 3, no station reachable');
-    A.ok(/TradeGod isn't running/.test(d.err) && /run `starnet` to start it/.test(d.err), 'status says TRADE GOD isn\'t running and that `starnet` starts it (' + d.err.trim() + ')');
+    A.ok(/TRADE GOD isn't running/.test(d.err) && /run `starnet` to start it/.test(d.err), 'status says TRADE GOD isn\'t running and that `starnet` starts it (' + d.err.trim() + ')');
     A.ok(!/open the TRADE GOD app/i.test(d.err) && !/to boot one/.test(d.err), 'status never says to open the app, nor to boot the station from the terminal');
     A.ok(!/starting it in the background/.test(d.err), 'a question never starts the app');
   } finally {

@@ -89,7 +89,7 @@ for (const [where, F] of [['node', NodeF], ['browser', BrowserF]]) {
     A.eq(F.friendlyError(LOCAL_SILENT_OLD, null, { engineAlive: true, code }).kind, 'local_timeout', tag + ': the older wording is no context overflow');
     // native Ollama's loaded-model silence: its placement sentence leads
     const o = F.friendlyError(OLLAMA_SILENT, null, { engineAlive: true, code: 'local_timeout' });
-    A.ok(/^Ollama on this computer had qwen3:8b loaded entirely on the CPU/.test(o.userMessage) && /TradeGod ended this turn without sending the prompt again\.$/.test(o.userMessage), where + ': Ollama\'s placement sentence leads: ' + o.userMessage);
+    A.ok(/^Ollama on this computer had qwen3:8b loaded entirely on the CPU/.test(o.userMessage) && /TRADE GOD ended this turn without sending the prompt again\.$/.test(o.userMessage), where + ': Ollama\'s placement sentence leads: ' + o.userMessage);
   }
   // a plain timeout stays a plain timeout
   A.eq(F.friendlyError('provider stream connect timed out after 30000ms with no bytes received', null, { engineAlive: true }).kind, 'timeout', where + ': a hosted timeout is untouched');

@@ -297,7 +297,7 @@ for (let i = 0; i < 8; i++) LONG.push({ role: 'assistant', content: 'progress no
       tools: [], dispatch: (c, ctx) => reg.dispatch(c, ctx), capCtx: openCtx(), clock: { now: () => Date.now() }, limits: { maxIters: 5 }, credentialGone: goneVia(w), sleep: async () => {} }, extra || {}))
       .then(res => ({ res, seq: s.seq })); };
     const sentence = id => { const p = Reg.getProviderProfile(id); return EC.credentialError({ id, label: p.label, kind: 'removed', what: 'this run', env: (p.keyEnv || []).find(n => /_API_KEY$/.test(n)) || (p.keyEnv || [])[0] || '' }); };
-    A.ok(/^the CUSTOM key this run started on was removed or replaced on this station, so it stopped before its next model call — run it again to use the key the station holds now, or add one under SETTINGS → AI & MODELS, or set CUSTOM_OPENAI_KEY in the environment that starts StarNet$/.test(sentence('custom')),
+    A.ok(/^the CUSTOM key this run started on was removed or replaced on this station, so it stopped before its next model call — run it again to use the key the station holds now, or add one under SETTINGS → AI & MODELS, or set CUSTOM_OPENAI_KEY in the environment that starts TRADE GOD$/.test(sentence('custom')),
       '11: the in-flight sentence names the provider, why, and both exits: ' + sentence('custom'));
     const rows = [
       ['a page REMOVE', 'custom', 'pg-cu', {}, (s, e) => e.put('custom', {}), true],

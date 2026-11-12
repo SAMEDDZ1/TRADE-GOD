@@ -62,7 +62,7 @@ function startMockModel() {
     const page = await fetch(relayUrl + '/');
     A.eq(page.status, 200, 'the relay serves the phone app');
     A.ok(/default-src 'self'/.test(page.headers.get('content-security-policy') || ''), 'with a strict CSP');
-    A.ok(/TradeGod Remote/.test(await page.text()), 'it is the Remote deck');
+    A.ok(/TRADE GOD Remote/.test(await page.text()), 'it is the Remote deck');
     A.eq((await fetch(relayUrl + '/phone-client.js')).status, 200, 'the phone client is served next to it');
     A.eq((await fetch(relayUrl + '/vt323.woff2')).status, 200, 'and the station font');
     A.eq((await fetch(relayUrl + '/../sidecar/index.js')).status === 200, false, 'nothing outside the app folder');

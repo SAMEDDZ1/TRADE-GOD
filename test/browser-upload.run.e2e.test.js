@@ -96,7 +96,7 @@ function reply(res, call) {
     const result = id => results.find(m => m.tool_call_id === id)?.content || '';
     A.ok(/File selected for upload: the input was handed a checked copy of it\./.test(result('upload')) && /re-checks it before each later browser action/.test(result('upload')) && /"size":19/.test(result('upload')), 'production browser deps resolve and select project bytes, not the private decoy');
     // run-paths-polish P1: the real CDP driver names the page, so the receipt states the page-lifetime lifecycle
-    A.ok(/TradeGod keeps that copy while this page stays open, at most 30 min/.test(result('upload')), 'the receipt states how long the copy is kept (while its page stays open, at most 30 min)');
+    A.ok(/TRADE GOD keeps that copy while this page stays open, at most 30 min/.test(result('upload')), 'the receipt states how long the copy is kept (while its page stays open, at most 30 min)');
     // review round 6: the bytes are read at submit and can still change, so the receipt never says "verified"
     A.ok(/Remote upload\/server acceptance is not verified/.test(result('upload')) && !/selection verified/i.test(result('upload')), 'model receives an honest selection-only receipt');
     A.ok(!/"doc"|loader/.test(result('upload')), 'the page bookkeeping (CDP session / loader id) never reaches the model');

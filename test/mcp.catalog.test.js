@@ -214,7 +214,7 @@ const ID_RE = /^[A-Za-z0-9_-]{1,40}$/;
     A.eq(e.staticOauth.clientSecretRequired, false, id + ' does not require a customer client secret');
     A.eq(e.staticOauth.developerPreview, false, id + ' does not depend on Developer Preview');
     A.ok(/^https:\/\/developers\.google\.com\/identity\//.test(e.staticOauth.setupUrl), id + ' links the official complete setup guide');
-    A.ok(/TradeGod supplies the Google application registration/i.test(e.staticOauth.setupNote), id + ' states the required Google Cloud enablement step');
+    A.ok(/TRADE GOD supplies the Google application registration/i.test(e.staticOauth.setupNote), id + ' states the required Google Cloud enablement step');
     A.eq(C.installConfig(id), null, id + ' is not one-click-upsert installable (sign-in flow owns it)');
     A.ok(e.aliases.indexOf('google') >= 0 && e.aliases.indexOf('google workspace') >= 0, id + ' is findable by the google names');
   }

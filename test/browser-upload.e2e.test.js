@@ -214,7 +214,7 @@ const { defaultStagingRoot } = require('../sidecar/egress-files.js');
     const reply = makeBrowserTools({ session: browser.session, fsp, pathMod: path, root: workspace, egress });
     ref = await open('/form', /CHOOSE FILE/);
     const p1 = await reply.tools.find(t => t.name === 'browser.upload').run({ ref, paths: ['photo.txt'] }, ctx);
-    A.ok(/TradeGod keeps that copy while this page stays open/.test(p1.content) && /The input holds the requested file now\./.test(p1.content), 'P1 (real Chrome): the receipt says the copy lives while its page does: ' + p1.content.slice(0, 160));
+    A.ok(/TRADE GOD keeps that copy while this page stays open/.test(p1.content) && /The input holds the requested file now\./.test(p1.content), 'P1 (real Chrome): the receipt says the copy lives while its page does: ' + p1.content.slice(0, 160));
     const held = browser.session.uploadStage.copies();
     const pageDoc = held.length ? held[held.length - 1].doc : null;
     A.ok(!!(pageDoc && pageDoc.loader), 'P1 (real Chrome): the CDP driver names the page the file went into');

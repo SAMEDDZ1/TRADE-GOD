@@ -16,7 +16,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const MARK = '# added by TRADE GOD: the `starnet` terminal command';
-const OURS = /StarNet[^/]*\.app\/Contents\/Resources\/bin\/starnet$/;
+const OURS = /(?:TradeGod|StarNet)[^/]*\.app\/Contents\/Resources\/bin\/starnet$/;
 const PROFILES = ['.zprofile', '.zshrc', '.zlogin', '.bash_profile', '.bashrc', '.profile'];
 
 /* o: { platform, execPath, home, env, exists(p) → bool, readlink(p) → string|null, readText(p) → string|null }
