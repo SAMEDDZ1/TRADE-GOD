@@ -20,7 +20,7 @@ const readBody = (req, max) => new Promise((resolve, reject) => {
 });
 const desk = makeTradingRoutes({ fs, path, dir: DIR, readBody, respondJson, fetch: (...a) => fetch(...a), log: l => console.log(l) });
 const FILES = {
-  '/app/tradingchart.js': 'frontend/app/tradingchart.js', '/app/windows/trading.js': 'frontend/app/windows/trading.js',
+  '/app/tradingchart.js': 'frontend/app/tradingchart.js', '/app/tradingfloor.js': 'frontend/app/tradingfloor.js', '/app/windows/trading.js': 'frontend/app/windows/trading.js',
   '/css/trading.css': 'frontend/css/trading.css', '/shared/specialties.js': 'shared/specialties.js', '/icon.png': 'src-tauri/icons/128x128.png'
 };
 const TYPES = { '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.html': 'text/html' };

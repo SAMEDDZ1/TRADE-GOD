@@ -24,11 +24,11 @@
   }
 
   const S = {
-    tab: 'desk', symbol: 'XAUUSD', tf: 'H1', state: null, candles: null, candleKey: '', strategies: null,
+    tab: 'floor', symbol: 'XAUUSD', tf: 'H1', state: null, candles: null, candleKey: '', strategies: null,
     scores: null, journal: null, chain: null, lab: null, labBusy: false, msg: '', msgKind: '', side: 'buy', tvTemplate: '',
-    body: null, chart: null, timer: null, inflight: false
+    body: null, chart: null, floor: null, timer: null, inflight: false
   };
-  const TABS = [['desk', 'DESK'], ['approvals', 'APPROVALS'], ['crew', 'CREW'], ['lab', 'BACKTEST LAB'], ['journal', 'JOURNAL'], ['setup', 'SETUP']];
+  const TABS = [['floor', 'FLOOR'], ['desk', 'DESK'], ['approvals', 'APPROVALS'], ['crew', 'CREW'], ['lab', 'BACKTEST LAB'], ['journal', 'JOURNAL'], ['setup', 'SETUP']];
   const TFS = ['M5', 'M15', 'H1', 'H4', 'D'];
   const LEVEL_TONE = { active: 'ok', review: 'warn', retrain: 'warn', probation: 'bad', practice: 'bad', benched: 'off' };
 
@@ -61,7 +61,7 @@
   function ensureTimer() {
     if (S.timer) return;
     S.timer = setInterval(() => {
-      if (!S.body || !document.contains(S.body)) { clearInterval(S.timer); S.timer = null; if (S.chart) { S.chart.destroy(); S.chart = null; } return; }
+      if (!S.body || !document.contains(S.body)) { clearInterval(S.timer); S.timer = null; if (S.chart) { S.chart.destroy(); S.chart = null; } if (S.floor) { S.floor.destroy(); S.floor = null; } return; }
       refresh();
     }, 2000);
   }
@@ -107,9 +107,11 @@
     S.body.querySelectorAll('.tg-tab').forEach(t => t.classList.toggle('on', t.dataset.tab === S.tab));
     const pane = slot('pane'); if (!pane) return;
     if (S.chart && S.tab !== 'desk') { S.chart.destroy(); S.chart = null; }
+    if (S.floor && S.tab !== 'floor') { S.floor.destroy(); S.floor = null; }
     renderTop(); renderMsg();
     if (!S.state) { pane.innerHTML = ''; return; }
-    if (S.tab === 'desk') paneDesk(pane);
+    if (S.tab === 'floor') paneFloor(pane);
+    else if (S.tab === 'desk') paneDesk(pane);
     else if (S.tab === 'approvals') paneApprovals(pane);
     else if (S.tab === 'crew') paneCrew(pane);
     else if (S.tab === 'lab') paneLab(pane);
@@ -120,7 +122,24 @@
   function renderLive() {
     renderTop();
     if (S.tab === 'desk') { liveDesk(); }
+    else if (S.tab === 'floor') { liveFloor(); }
     else if (S.tab === 'approvals') { const pane = slot('pane'); if (pane && !pane.contains(document.activeElement)) paneApprovals(pane); }
+  }
+
+  // ------------------------------------------------------------------ FLOOR
+  function paneFloor(pane) {
+    pane.innerHTML = '<canvas class="tg-floor" data-slot="floor"></canvas>'
+      + '<p class="dim">Your company at work. Lit desks have a crew member who has traded; dim desks are open seats you can fill from CREW › RECRUIT. '
+      + 'Badges show the Agent Coach level (amber = review/retrain, orange = probation, red = practice). The light over the floor turns red while the kill switch is on. Hover a desk to see the role.</p>';
+    if (S.floor) S.floor.destroy();
+    S.floor = (typeof TradingFloor !== 'undefined') ? TradingFloor.create(pane.querySelector('[data-slot="floor"]')) : null;
+    liveFloor(true);
+  }
+  async function liveFloor(fetchScores) {
+    if (!S.floor) return;
+    if (fetchScores || !S.scores || Date.now() - (S.scoresAt || 0) > 10000) { try { S.scores = await get('/api/trading/scorecards'); S.scoresAt = Date.now(); } catch (_) {} }
+    const roster = (typeof SharedSpecialties !== 'undefined' && SharedSpecialties.BUILTINS) ? SharedSpecialties.BUILTINS : [];
+    if (S.floor) S.floor.set({ state: S.state, scores: S.scores, roster });
   }
 
   // ------------------------------------------------------------------ DESK
@@ -442,4 +461,21 @@
   }
 
   StationUI.registerWindow('trading', 'TRADING DESK', build, { className: 'trading-win' });
+
+  /* TRADE GOD opens on its trading floor: once the station screen is up (the bottom bar is visible) and no window is
+     open yet, raise the TRADING DESK — once per launch. Turn it off with localStorage 'tradegod.openDeskOnLaunch' = '0'. */
+  (function openOnLaunch() {
+    let pref = '1';
+    try { pref = localStorage.getItem('tradegod.openDeskOnLaunch') || '1'; } catch (_) {}
+    if (pref === '0') return;
+    const started = Date.now();
+    const iv = setInterval(() => {
+      if (Date.now() - started > 120000) { clearInterval(iv); return; }
+      const bar = document.getElementById('bottombar');
+      if (!bar || !bar.offsetParent) return;
+      clearInterval(iv);
+      if (document.querySelector('.term.trading-win')) return;
+      try { StationUI.h.openTerm('trading'); } catch (e) { console.warn('[trading] could not open the desk on launch:', e && e.message); }
+    }, 700);
+  })();
 })();
