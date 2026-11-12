@@ -131,7 +131,11 @@
       // a seat is lit when a crew member of that role has a record, a ticket or a position — an agent id is the role id or '<role>-<n>'
       const active = new Set(Object.keys(agents));
       if (st) { for (const t of (st.tickets || [])) if (t.source === 'agent') active.add(t.agentId); for (const p of (st.positions || [])) active.add(p.agentId); }
-      const mine = id => Array.from(active).filter(a => a === id || (a && a.indexOf(id + '-') === 0));
+      // an agent belongs at a role's desk when the roster says it holds that role, or its id is '<role>' / '<role>-<n>'
+      const crew = data.crew || [];
+      const roleOf = a => { const m = crew.find(x => x.agentId === a); return m && m.role ? m.role : ''; };
+      for (const m of crew) if (m.role) active.add(m.agentId);
+      const mine = id => Array.from(active).filter(a => a && (roleOf(a) === id || a === id || a.indexOf(id + '-') === 0));
       const hired = id => mine(id).length > 0;
       const RANK = { benched: 5, practice: 4, probation: 3, retrain: 2, review: 1, active: 0 };
       const levelOf = id => mine(id).map(a => agents[a] ? agents[a].status.level : '').sort((x, y) => (RANK[y] || 0) - (RANK[x] || 0))[0] || '';

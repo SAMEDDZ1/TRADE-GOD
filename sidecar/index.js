@@ -13210,7 +13210,10 @@ const { makeTradingRoutes } = require('./trading/routes.js');
 const tradingDesk = makeTradingRoutes({
   fs, path, dir: path.join(WORKSPACES, 'trading'), readBody, respondJson,
   writeFile: (file, data) => writeFileDurable({ fs, path }, file, data),
-  fetch: (...a) => globalThis.fetch(...a), now: () => Date.now(), log: line => console.log(line)
+  fetch: (...a) => globalThis.fetch(...a), now: () => Date.now(), log: line => console.log(line),
+  // the crew as the page last pushed it (POST /api/roster): names and roles for the scorecards and the trading floor
+  crew: () => Array.from(agentRoster.keys()).map(id => { const r = agentRosterRaw.get(id) || agentRoster.get(id) || {};
+    return { agentId: id, name: String(r.name || id).slice(0, 60), role: /^[a-z0-9]{1,30}$/.test(String(r.specialtyId || '')) ? String(r.specialtyId) : '' }; })
 });
 const TRADING_TV_HOOK = '/api/trading/tv-webhook';
 const tradingTvHookRoute = tradingDesk.routes.find(r => r.exact === TRADING_TV_HOOK);

@@ -106,6 +106,7 @@ function makeTradingRoutes(deps) {
   // an account with something at stake keeps being priced from boot, whether or not anyone has the window open
   try { const s = svc.snapshot(); if (s.positions.length || s.orders.length) ensureDriver(); } catch (e) { log('[trading] boot check failed: ' + e.message); }
 
+  function crewList() { try { return typeof deps.crew === 'function' ? (deps.crew() || []).slice(0, 200) : []; } catch (e) { log('[trading] crew read failed: ' + e.message); return []; } }
   const ok = (res, body) => respondJson(res, 200, Object.assign({ ok: true }, body));
   const bad = (res, code, error, extra) => respondJson(res, code, Object.assign({ ok: false, error }, extra || {}));
   async function body(req, max) {
@@ -153,7 +154,7 @@ function makeTradingRoutes(deps) {
       if (r.error) return bad(res, 502, r.error);
       ok(res, { symbol, granularity: g, candles: r.candles, simulated: r.simulated, source: r.source });
     }) },
-    { m: 'GET', exact: '/api/trading/scorecards', h: guard(async (req, res) => ok(res, svc.scorecards())) },
+    { m: 'GET', exact: '/api/trading/scorecards', h: guard(async (req, res) => ok(res, Object.assign(svc.scorecards(), { crew: crewList() }))) },
     { m: 'GET', qsplit: '/api/trading/journal', h: guard(async (req, res) => {
       const q = query(req);
       ok(res, { entries: svc.journal({ limit: Math.min(1000, Math.max(1, Number(q.get('limit')) || 200)), type: q.get('type') || '' }).reverse() });

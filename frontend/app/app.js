@@ -1545,7 +1545,8 @@ const App = (() => {
       const list = liveAgents().map(a => ({ agentId: a.id, system: a.systemPrompt || '', name: a.name || a.id, model: a.model || '', provider: (a.model || a.id === 'agent') ? (a.provider || fallbackProv) : '', role: rosterRole(a), approvalMode: (a.approvalMode === 'full' ? 'full' : 'ask'), executionProfile: executionProfileOf(a),
         track: rosterTrack(a),    // S3: this agent's EARNED track record, so the lead's dispatch briefing can pick on evidence (see rosterTrack)
         workshop: !!a.workshop,   // W3: the away-build grant travels with the roster so the consent broker can honor it
-        skills: Array.isArray(a.skills) ? a.skills : [], reasoningEffort: a.reasoningEffort || null }));   // #4: each agent's OWN provider; Class Loadouts S1: per-agent skill package + applied effort
+        skills: Array.isArray(a.skills) ? a.skills : [], reasoningEffort: a.reasoningEffort || null,
+        specialtyId: a.specialtyId || '' }));   // TRADE GOD: the crew role (headcoach, metals, …) — the trading floor seats each agent at its role's desk   // #4: each agent's OWN provider; Class Loadouts S1: per-agent skill package + applied effort
       // P1.1 (UPDATE_STATE_SAFETY_AUDIT): stamp a freshness `updatedAt` so the sidecar can refuse a STALE push (a
       // background tab / out-of-sync frontend whose roster is older than what the store already accepted). The
       // sidecar records the stamp of the last accepted write and 200s { ok:false, stale:true } on an older one;

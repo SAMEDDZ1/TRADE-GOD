@@ -129,7 +129,7 @@
   // ------------------------------------------------------------------ FLOOR
   function paneFloor(pane) {
     pane.innerHTML = '<canvas class="tg-floor" data-slot="floor"></canvas>'
-      + '<p class="dim">Your company at work. Lit desks have a crew member who has traded; dim desks are open seats you can fill from CREW › RECRUIT. '
+      + '<p class="dim">Your company at work. Lit desks have a crew member in that role (recruit them from CREW › RECRUIT and pick the trading class); dim desks are open seats. '
       + 'Badges show the Agent Coach level (amber = review/retrain, orange = probation, red = practice). The light over the floor turns red while the kill switch is on. Hover a desk to see the role.</p>';
     if (S.floor) S.floor.destroy();
     S.floor = (typeof TradingFloor !== 'undefined') ? TradingFloor.create(pane.querySelector('[data-slot="floor"]')) : null;
@@ -139,7 +139,7 @@
     if (!S.floor) return;
     if (fetchScores || !S.scores || Date.now() - (S.scoresAt || 0) > 10000) { try { S.scores = await get('/api/trading/scorecards'); S.scoresAt = Date.now(); } catch (_) {} }
     const roster = (typeof SharedSpecialties !== 'undefined' && SharedSpecialties.BUILTINS) ? SharedSpecialties.BUILTINS : [];
-    if (S.floor) S.floor.set({ state: S.state, scores: S.scores, roster });
+    if (S.floor) S.floor.set({ state: S.state, scores: S.scores, roster, crew: (S.scores && S.scores.crew) || [] });
   }
 
   // ------------------------------------------------------------------ DESK
@@ -250,7 +250,9 @@
     const sc = await get('/api/trading/scorecards'); S.scores = sc;
     if (S.tab !== 'crew') return;
     const cat = (typeof SharedSpecialties !== 'undefined' && SharedSpecialties.BUILTINS) ? SharedSpecialties.BUILTINS : [];
-    const nameOf = id => { const c = cat.find(x => x.id === id); return c ? c.name : id; };
+    const crew = sc.crew || [];
+    const nameOf = id => { const m = crew.find(x => x.agentId === id); if (m) { const role = cat.find(x => x.id === m.role); return m.name + (role ? ' — ' + role.name : ''); }
+      const c = cat.find(x => x.id === id || id.indexOf(x.id + '-') === 0); return c ? c.name : id; };
     const card = c => '<span>Trades <b>' + c.n + '</b></span><span>Win rate <b>' + pct(c.winRate) + '</b></span><span>Profit factor <b>' + (c.profitFactor == null ? '—' : c.profitFactor) + '</b></span>'
       + '<span>Net <b class="' + tone(c.netPnl) + '">' + signed(c.netPnl) + '</b></span><span>Max drawdown <b>' + (c.maxDrawdownPct == null ? money(c.maxDrawdown) : c.maxDrawdownPct + '%') + '</b></span>'
       + '<span>Avg R <b>' + (c.avgR == null ? '—' : c.avgR) + '</b></span><span>Calibration <b>' + (c.brier == null ? '—' : c.brier) + '</b></span><span>Losing streak <b>' + c.currentLosingStreak + '</b></span>';
